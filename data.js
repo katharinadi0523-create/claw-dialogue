@@ -29,7 +29,7 @@ const DEMO_DATA = (() => {
   const artifactsAfterDeletion = artifacts.filter((artifact) => artifact.name !== draftDocumentArtifact.name);
 
   const recentTasks = [
-    { id: "task-001", title: "上海出差报销", status: "completed", active: true, pinned: true },
+    { id: "task-001", title: "上海出差报销", status: "completed", active: true, pinned: true, kind: "expense" },
     { id: "task-002", title: "桌面助手前端设计", status: "awaiting", pinned: true },
     { id: "task-003", title: "华东经营周报整理", status: "running", pinned: false },
     { id: "task-004", title: "Q1 销售复盘报告", status: "idle", pinned: false },
@@ -38,6 +38,316 @@ const DEMO_DATA = (() => {
     { id: "task-007", title: "差旅制度版本对比", status: "completed", pinned: false },
     { id: "task-008", title: "客户拜访纪要归档", status: "awaiting", pinned: false }
   ];
+
+  const enterpriseAgentCategoryTabs = [
+    { id: "all", label: "全部" },
+    { id: "product_design", label: "产品设计" },
+    { id: "software_dev", label: "软件开发" },
+    { id: "project_management", label: "项目管理" },
+    { id: "marketing", label: "市场营销" },
+    { id: "sales", label: "销售" },
+    { id: "quality_testing", label: "质量测试" },
+    { id: "strategic_analysis", label: "战略分析" },
+    { id: "scientific_research", label: "科研实验" },
+    { id: "media", label: "媒体" }
+  ];
+
+  const enterpriseAgents = [
+    {
+      id: "cloud-factory-ops",
+      name: "云码工厂维护专员",
+      description: "自动化维护云码工厂迭代、故事、任务、缺陷等",
+      category: "software_dev",
+      chatFlowKey: "cloudFactoryOps"
+    },
+    {
+      id: "prd-writer",
+      name: "PRD写手",
+      description: "把需求要点整理为可评审的 PRD：场景、流程、边界与验收口径一次写清楚。",
+      category: "product_design",
+      chatFlowKey: "prdWriter"
+    },
+    {
+      id: "product-planning",
+      name: "产品规划专家",
+      description: "结合机会与组织能力拆解节奏与里程碑，输出路线图级规划与优先级建议。",
+      category: "product_design"
+    },
+    {
+      id: "market-insight",
+      name: "市场洞察",
+      description: "汇聚行业信号、竞品动作与用户线索，沉淀成可执行的小结与下一步假设。",
+      category: "marketing",
+      chatFlowKey: "marketInsight"
+    },
+    {
+      id: "vibe-coder",
+      name: "Vibe Coder",
+      description: "以快速原型为导向，把想法落成可点可用的小功能，加速试错与演示闭环。",
+      category: "software_dev",
+      chatFlowKey: "vibeCoder"
+    },
+    {
+      id: "architect",
+      name: "资深架构师",
+      description: "在高并发与演进约束下给出分层、边界与关键技术取舍，控制长期复杂度。",
+      category: "software_dev"
+    },
+    {
+      id: "content-creator",
+      name: "内容创作专家",
+      description: "产出品牌一致的传播与营销文案，兼顾要点提炼、叙事结构与多平台适配。",
+      category: "media",
+      chatFlowKey: "contentCreator"
+    },
+    {
+      id: "senior-dev",
+      name: "高级开发工程师",
+      description: "落地核心业务功能，关注性能、可观测性、代码规范与线上稳定性。",
+      category: "software_dev",
+      chatFlowKey: "seniorDev"
+    },
+    {
+      id: "ml-engineer",
+      name: "模型训练算法工程师",
+      description: "围绕任务的数据处理、训练策略与评测闭环迭代，持续提升模型效果与成本。",
+      category: "scientific_research",
+      suggestedPrompts: [
+        "请帮我设计一个小规模文本分类实验方案：数据标注规范、训练/验证划分、基线模型选型与评测指标。"
+      ]
+    },
+    {
+      id: "ui-designer",
+      name: "UI设计师",
+      description: "以可用性与一致性为核心，完善信息架构、组件规范与关键界面表达。",
+      category: "product_design",
+      suggestedPrompts: [
+        "请围绕企业级智能体广场与 Chat 联动，输出一版关键界面的信息架构、组件拆分与空态/加载态建议。"
+      ]
+    },
+    {
+      id: "pm-senior",
+      name: "高级项目经理",
+      description: "统筹范围、风险与干系人沟通，保障里程碑透明交付与问题及时上升。",
+      category: "project_management",
+      suggestedPrompts: [
+        "请帮我把当前跨团队需求拆成两周节奏：里程碑、依赖、风险登记与干系人沟通要点。"
+      ]
+    },
+    {
+      id: "agent-orchestrator",
+      name: "智能体编排师",
+      description: "设计多智能体协同工作流，编排工具调用、知识检索与人类审核节点。",
+      category: "software_dev",
+      suggestedPrompts: [
+        "请把「用户提问 → 多智能体分工 → 工具调用 → 人工审核」的典型链路拆成可编排节点与异常分支。"
+      ]
+    },
+    {
+      id: "security",
+      name: "网安专家",
+      description: "从威胁建模、访问控制到合规检查，给出加固清单、审计要点与演练建议。",
+      category: "quality_testing",
+      suggestedPrompts: [
+        "请对企业级智能体接入场景做一次简要威胁建模，列出关键控制点、审计要点与演练建议。"
+      ]
+    },
+    {
+      id: "strategy",
+      name: "战略咨询顾问",
+      description: "用结构化方法澄清商业问题，支持决策材料、关键假设验证与路径推演。",
+      category: "strategic_analysis",
+      suggestedPrompts: [
+        "请用一页纸结构梳理某业务线的增长假设、验证路径、资源投入与止损条件，便于上会讨论。"
+      ]
+    },
+    {
+      id: "sdet",
+      name: "测开工程师",
+      description: "建设自动化测试与质量门禁，覆盖接口、端到端与持续集成中的回归效率。",
+      category: "quality_testing",
+      suggestedPrompts: [
+        "请为关键接口与核心用户路径给出自动化测试分层、回归门禁与 CI 集成要点建议。"
+      ]
+    }
+  ];
+
+  const enterpriseFlowPresets = {
+    default: {
+      defaultQuery: "请围绕当前任务目标，给我一版结构清楚、可直接落地的执行方案与结果草稿。",
+      recentTaskTitle: "生成企业智能体处理结果",
+      planningText: "收到，我会先理解目标和约束，再组织资料、整理方案，最后输出一版可复用的结果草稿。",
+      planItems: [
+        { title: "理解任务目标与约束", tool: "任务理解", eta: "约 10 秒" },
+        { title: "检索相关资料并提炼重点", tool: "资料整理", eta: "约 15 秒" },
+        { title: "生成结果草稿与交付建议", tool: "内容生成", eta: "约 20 秒" }
+      ],
+      stages: [
+        {
+          title: "任务理解与拆解",
+          logs: ["已识别任务目标、输入上下文与预期输出。", "已拆成可执行步骤并准备进入资料处理阶段。"]
+        },
+        {
+          title: "资料整合与方案生成",
+          logs: ["已整理关键信息并形成结构化提纲。", "正在生成可直接交付的结果草稿。"]
+        }
+      ],
+      artifacts: [
+        { name: "企业智能体结果草稿.docx", path: "/ClawAgent/企业智能体/企业智能体结果草稿.docx", size: "146 KB" }
+      ],
+      finalMessage: "已生成结果草稿与下一步建议，可直接继续补充或导出。"
+    },
+    cloudFactoryOps: {
+      defaultQuery: "请帮我梳理当前迭代中阻塞交付的故事、任务和缺陷，输出优先级、负责人和建议动作。",
+      recentTaskTitle: "生成云码工厂维护清单",
+      planningText: "收到，我会先聚合当前迭代的故事、任务和缺陷，再识别阻塞关系与责任人，最后生成一版可确认的维护清单。",
+      planItems: [
+        { title: "聚合当前迭代的故事、任务、缺陷", tool: "云码工厂维护 Skill", eta: "约 12 秒" },
+        { title: "识别阻塞关系与责任人", tool: "迭代查询", eta: "约 16 秒" },
+        { title: "生成维护清单与风险摘要", tool: "清单生成", eta: "约 18 秒" }
+      ],
+      stages: [
+        {
+          title: "云码工厂维护 Skill",
+          logs: ["已识别目标项目：CCCloud 企业智能体接入。", "已连接迭代、任务、缺陷与成员信息。"]
+        },
+        {
+          title: "维护清单生成",
+          logs: ["共识别阻塞事项 11 个，其中高优先级 5 个。", "已输出《云码工厂阻塞事项清单》与沟通摘要。"]
+        }
+      ],
+      artifacts: [
+        { name: "云码工厂阻塞事项清单.xlsx", path: "/ClawAgent/企业智能体/云码工厂阻塞事项清单.xlsx", size: "96 KB" },
+        { name: "迭代风险沟通摘要.md", path: "/ClawAgent/企业智能体/迭代风险沟通摘要.md", size: "18 KB" }
+      ],
+      finalMessage: "已生成当前迭代维护清单和风险沟通摘要，可直接用于后续跟进。"
+    },
+    prdWriter: {
+      defaultQuery: "请根据“企业级智能体广场点击智能体后回到 Chat 页面，自动回显推荐问并可一键发送；默认态仅在点击办公助手时展示差旅报销推荐问和三张附件”这个需求，整理一版可评审 PRD。",
+      recentTaskTitle: "生成企业智能体联动 PRD",
+      planningText: "收到，我会先把需求背景、范围和交互变化拆清楚，再整理关键流程与验收口径，最后输出一版可评审 PRD。",
+      planItems: [
+        { title: "结构化需求背景与范围", tool: "需求结构化 Skill", eta: "约 12 秒" },
+        { title: "梳理页面联动与状态回填", tool: "交互流程", eta: "约 18 秒" },
+        { title: "生成 PRD 与流程说明", tool: "文档草拟", eta: "约 20 秒" }
+      ],
+      stages: [
+        {
+          title: "需求结构化 Skill",
+          logs: ["已提炼需求背景、目标用户与关键变化点。", "已识别涉及企业级智能体广场、Chat 空态与推荐问机制。"]
+        },
+        {
+          title: "PRD 文档草拟",
+          logs: ["已生成需求概述、交互流程、状态逻辑和验收标准章节。", "已补充《企业级智能体对话联动 PRD》初稿。"]
+        }
+      ],
+      artifacts: [
+        { name: "企业级智能体对话联动PRD.docx", path: "/ClawAgent/企业智能体/企业级智能体对话联动PRD.docx", size: "208 KB" },
+        { name: "交互流程说明.md", path: "/ClawAgent/企业智能体/交互流程说明.md", size: "24 KB" }
+      ],
+      finalMessage: "已生成可评审 PRD 初稿与交互流程说明，可直接进入评审。"
+    },
+    marketInsight: {
+      defaultQuery: "请帮我分析企业级智能体产品近期的市场机会与竞品动作，整理成一个可执行的洞察摘要。",
+      recentTaskTitle: "生成企业级智能体市场洞察",
+      planningText: "收到，我会先归集市场信号和竞品动作，再抽取机会点与竞争压力，最后整理成一份可确认的洞察摘要。",
+      planItems: [
+        { title: "归集市场信号与竞品动态", tool: "市场信号聚合 Skill", eta: "约 12 秒" },
+        { title: "归类竞争动作与机会点", tool: "竞品动作归类", eta: "约 15 秒" },
+        { title: "生成洞察摘要与清单", tool: "摘要生成", eta: "约 18 秒" }
+      ],
+      stages: [
+        {
+          title: "市场信号聚合 Skill",
+          logs: ["已归集企业智能体领域近两周的产品发布、行业活动与客户线索。", "识别出效率提升、企业知识助手和多智能体协同是高频关注点。"]
+        },
+        {
+          title: "机会点摘要生成",
+          logs: ["已整理 3 个可重点跟进的市场机会。", "已输出《企业级智能体市场洞察摘要》初稿。"]
+        }
+      ],
+      artifacts: [
+        { name: "企业级智能体市场洞察摘要.docx", path: "/ClawAgent/企业智能体/企业级智能体市场洞察摘要.docx", size: "192 KB" },
+        { name: "竞品动作清单.xlsx", path: "/ClawAgent/企业智能体/竞品动作清单.xlsx", size: "88 KB" }
+      ],
+      finalMessage: "已生成市场洞察摘要、竞品动作清单与下一步建议。"
+    },
+    vibeCoder: {
+      defaultQuery: "请基于企业级智能体广场跳转 Chat 的需求，快速给出一个可演示的前端原型实现方案。",
+      recentTaskTitle: "生成前端原型实现方案",
+      planningText: "收到，我会先明确交互目标与页面状态，再快速拼出一个可演示的前端原型方案，最后整理成可确认的实现说明。",
+      planItems: [
+        { title: "识别关键交互与原型范围", tool: "快速原型 Skill", eta: "约 10 秒" },
+        { title: "编排页面状态与组件职责", tool: "页面状态编排", eta: "约 16 秒" },
+        { title: "输出原型方案与状态映射", tool: "原型脚本", eta: "约 20 秒" }
+      ],
+      stages: [
+        {
+          title: "快速原型 Skill",
+          logs: ["已识别关键交互：广场点击、Chat 回显、推荐问发送、办公助手默认态。", "已确认原型范围聚焦在页面联动与对话态切换。"]
+        },
+        {
+          title: "交互原型脚本",
+          logs: ["已生成状态切换说明与组件职责草稿。", "已输出原型方案说明，可用于演示和联调。"]
+        }
+      ],
+      artifacts: [
+        { name: "企业智能体联动原型方案.md", path: "/ClawAgent/企业智能体/企业智能体联动原型方案.md", size: "26 KB" },
+        { name: "前端状态映射表.xlsx", path: "/ClawAgent/企业智能体/前端状态映射表.xlsx", size: "74 KB" }
+      ],
+      finalMessage: "已生成可演示的前端原型方案与状态映射说明。"
+    },
+    contentCreator: {
+      defaultQuery: "请围绕企业级智能体广场新能力，产出一版面向内部宣发的功能介绍文案和发布话术。",
+      recentTaskTitle: "生成功能宣发文案",
+      planningText: "收到，我会先提炼这次功能变更的卖点和场景价值，再整理发布文案与渠道话术，最后输出一版可确认的内容包。",
+      planItems: [
+        { title: "提炼功能变化与目标受众", tool: "内容策划 Skill", eta: "约 10 秒" },
+        { title: "沉淀卖点与表达主线", tool: "卖点提炼", eta: "约 14 秒" },
+        { title: "生成发布文案与渠道话术", tool: "文案生成", eta: "约 18 秒" }
+      ],
+      stages: [
+        {
+          title: "内容策划 Skill",
+          logs: ["已提炼功能变化：广场智能体可直接带推荐问进入 Chat，办公助手默认态更明确。", "已确认目标受众为产品、设计、研发和内部运营团队。"]
+        },
+        {
+          title: "宣发文案生成",
+          logs: ["已生成《功能发布文案》和《渠道话术清单》。", "已形成一版适合内部传播的内容包。"]
+        }
+      ],
+      artifacts: [
+        { name: "企业智能体功能发布文案.docx", path: "/ClawAgent/企业智能体/企业智能体功能发布文案.docx", size: "154 KB" },
+        { name: "渠道话术清单.xlsx", path: "/ClawAgent/企业智能体/渠道话术清单.xlsx", size: "61 KB" }
+      ],
+      finalMessage: "已生成内部宣发文案、发布话术与使用场景摘要。"
+    },
+    seniorDev: {
+      defaultQuery: "请把企业级智能体广场智能体跳转 Chat 的需求拆成开发任务，给出接口、前端状态、联调和测试重点。",
+      recentTaskTitle: "生成研发执行清单",
+      planningText: "收到，我会先拆解需求涉及的状态和入口，再细化成开发、联调和测试任务，最后输出一版可确认的研发执行清单。",
+      planItems: [
+        { title: "拆解页面入口与状态点", tool: "开发任务拆解 Skill", eta: "约 12 秒" },
+        { title: "梳理接口、联调与回归重点", tool: "接口与状态梳理", eta: "约 16 秒" },
+        { title: "生成研发清单与检查单", tool: "执行清单生成", eta: "约 18 秒" }
+      ],
+      stages: [
+        {
+          title: "开发任务拆解 Skill",
+          logs: ["已识别需求涉及广场列表、Chat 输入态、flow 配置与默认态逻辑。", "将任务拆为数据配置、路由回填、页面状态同步和验证四类。"]
+        },
+        {
+          title: "研发执行清单生成",
+          logs: ["已整理开发任务、联调关注点和回归测试点。", "已输出《开发任务拆解表》和《联调检查单》。"]
+        }
+      ],
+      artifacts: [
+        { name: "开发任务拆解表.xlsx", path: "/ClawAgent/企业智能体/开发任务拆解表.xlsx", size: "82 KB" },
+        { name: "联调检查单.md", path: "/ClawAgent/企业智能体/联调检查单.md", size: "22 KB" }
+      ],
+      finalMessage: "已输出开发任务拆解、联调重点与测试检查单。"
+    }
+  };
 
   const staticAnnotations = {
     shell: {
@@ -1024,7 +1334,19 @@ const DEMO_DATA = (() => {
     }
   ];
 
-  return { steps, planItems, todoItems, artifacts, artifactsAfterDeletion, draftDocumentArtifact, recentTasks, staticAnnotations };
+  return {
+    steps,
+    planItems,
+    todoItems,
+    artifacts,
+    artifactsAfterDeletion,
+    draftDocumentArtifact,
+    recentTasks,
+    enterpriseAgentCategoryTabs,
+    enterpriseAgents,
+    enterpriseFlowPresets,
+    staticAnnotations
+  };
 })();
 
 window.DEMO_DATA = DEMO_DATA;
