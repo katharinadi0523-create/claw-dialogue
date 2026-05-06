@@ -38,6 +38,16 @@
     return JSON.parse(JSON.stringify(value));
   }
 
+  function emitTasksUpdated() {
+    window.dispatchEvent(
+      new CustomEvent("automation-tasks:updated", {
+        detail: {
+          tasks: state.tasks.map(clone)
+        }
+      })
+    );
+  }
+
   function escapeHTML(value) {
     return String(value == null ? "" : value)
       .replace(/&/g, "&amp;")
@@ -184,6 +194,7 @@
   function init({ container }) {
     state.root = container;
     state.tasks = Array.isArray(window.AUTOMATION_TASKS_MOCK) ? window.AUTOMATION_TASKS_MOCK.map(clone) : [];
+    emitTasksUpdated();
 
     container.addEventListener("click", handleClick);
     container.addEventListener("input", handleInput);
@@ -331,6 +342,7 @@
         nextTask.event_config.secret = generateWebhookSecret();
       }
       state.tasks.unshift(nextTask);
+      emitTasksUpdated();
       state.modal = null;
       setMessage(`已创建任务：${nextTask.name}`);
     } else {
@@ -339,6 +351,7 @@
         nextTask.event_config.secret = nextTask.event_config.secret || generateWebhookSecret();
       }
       state.tasks = state.tasks.map((item) => (item.id === nextTask.id ? nextTask : item));
+      emitTasksUpdated();
       state.modal = null;
       setMessage(`已更新任务：${nextTask.name}`);
     }
@@ -397,6 +410,7 @@
       const target = state.tasks.find((item) => item.id === taskId);
       if (!target) return;
       target.enabled = !target.enabled;
+      emitTasksUpdated();
       setMessage(`${target.name} 已${target.enabled ? "启用" : "停用"}。`);
       return;
     }
@@ -410,6 +424,7 @@
       if (!task) return;
       if (!window.confirm(`确认删除任务「${task.name}」吗？`)) return;
       state.tasks = state.tasks.filter((item) => item.id !== task.id);
+      emitTasksUpdated();
       setMessage(`已删除任务：${task.name}`);
       return;
     }
@@ -891,6 +906,7 @@
 
   window.AutomationTasksModule = {
     init,
-    render
+    render,
+    getTasks: () => state.tasks.map(clone)
   };
 })();

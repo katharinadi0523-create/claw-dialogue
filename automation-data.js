@@ -1,22 +1,23 @@
 window.AUTOMATION_TASKS_MOCK = [
   {
-    id: "auto-schedule-daily-brief",
-    name: "每日销售简报",
-    description: "汇总 CRM 新增线索、成交情况与异常客户，工作日上午推送给销售负责人。",
+    id: "auto-schedule-daily-english",
+    workspace_name: "英语单词推荐",
+    name: "每天推荐 5 个实用英语单词",
+    description: "每天早上推荐 5 个实用英语单词，附音标、中文释义与简短例句。",
     trigger_type: "time",
     trigger_mode: "schedule",
-    trigger_summary: "每天 09:00",
-    last_run_at: "2026-04-13 09:00",
+    trigger_summary: "每天 08:30",
+    last_run_at: "2026-04-30 08:42",
     last_run_status: "success",
     enabled: true,
-    agent_id: "agent-sales-ops",
+    agent_id: "agent-language-coach",
     instruction:
-      "统计昨日 18:00 到今日 09:00 的新增线索、成交单和高风险跟进项，生成 300 字以内中文摘要，并附上需要优先处理的客户名单，输出到销售群日报频道。",
+      "每天早上推荐 5 个实用英语单词；每个单词输出音标、词性、中文释义和一个不超过 12 个词的英文例句，整体保持简洁、易记、适合晨读。",
     schedule_config: {
       execution_type: "schedule",
       frequency: "daily",
       weekdays: [],
-      time: "09:00",
+      time: "08:30",
       interval_value: 6,
       interval_unit: "hour",
       run_at_date: "",
@@ -26,40 +27,56 @@ window.AUTOMATION_TASKS_MOCK = [
     },
     recent_runs: [
       {
-        triggered_at: "2026-04-13 09:00",
+        triggered_at: "2026-04-30 08:42",
         result: "success",
-        summary: "已发送晨报，包含 12 条新增线索与 3 个高风险客户提醒。"
+        summary: "已推荐 practical、nudge、cozy、steady、glimpse 5 个单词。",
+        sidebar_relative: "刚刚"
       },
       {
-        triggered_at: "2026-04-12 09:00",
+        triggered_at: "2026-04-29 21:30",
         result: "success",
-        summary: "日报生成成功，自动附带前一日成交漏斗趋势。"
+        summary: "已推荐 vivid、boost、tidy、humble、thrive 5 个单词。",
+        sidebar_relative: "11小时前"
       },
       {
-        triggered_at: "2026-04-11 09:00",
+        triggered_at: "2026-04-29 08:30",
         result: "success",
-        summary: "日报按时投递，未发现数据采集异常。"
+        summary: "已推荐 clarity、gentle、spark、rely、brief 5 个单词。",
+        sidebar_relative: "1天前"
+      },
+      {
+        triggered_at: "2026-04-24 08:30",
+        result: "success",
+        summary: "已推荐 adapt、focus、kind、notion、value 5 个单词。",
+        sidebar_relative: "6天前"
+      },
+      {
+        triggered_at: "2026-04-24 07:55",
+        result: "success",
+        summary: "已推荐 settle、curious、measure、prompt、calm 5 个单词。",
+        sidebar_relative: "6天前"
       }
     ]
   },
   {
-    id: "auto-schedule-risk-weekly",
-    name: "周一风控巡检",
-    description: "每周一检查异常付款、退款激增与审批逾期情况，生成风控复盘清单。",
+    id: "auto-schedule-morning-boost",
+    workspace_name: "automation-202604210800",
+    name: "每天早上给我加油打气",
+    description: "每天早上发送一句简短打气话和一个当天行动提醒。",
     trigger_type: "time",
     trigger_mode: "schedule",
-    trigger_summary: "每周一 10:00",
-    last_run_at: "2026-04-13 10:00",
-    last_run_status: "failed",
+    trigger_summary: "每天 08:00",
+    last_run_at: "2026-04-30 08:00",
+    last_run_status: "success",
     enabled: true,
-    agent_id: "agent-risk-review",
+    agent_id: "agent-morning-boost",
     instruction:
-      "扫描上周交易、退款、审批流与访问日志，找出异常金额、重复退款和超期审批单，输出风控复盘摘要并提醒财务负责人确认。",
+      "每天早上生成一句不超过 30 字的中文鼓励语，再补一句当天可执行的小提醒，整体要温和、有力量，不要鸡汤式空话。",
     schedule_config: {
       execution_type: "schedule",
-      frequency: "weekly",
-      weekdays: ["mon"],
-      time: "10:00",
+      frequency: "daily",
+      weekdays: [],
+      time: "08:00",
       interval_value: 1,
       interval_unit: "day",
       run_at_date: "",
@@ -69,19 +86,14 @@ window.AUTOMATION_TASKS_MOCK = [
     },
     recent_runs: [
       {
-        triggered_at: "2026-04-13 10:00",
-        result: "failed",
-        summary: "退款接口返回 502，风控摘要未能生成。"
+        triggered_at: "2026-04-30 08:00",
+        result: "success",
+        summary: "已发送今日鼓励：先把最重要的一件事做完，今天就已经赢了一半。"
       },
       {
-        triggered_at: "2026-04-06 10:00",
+        triggered_at: "2026-04-29 08:00",
         result: "success",
-        summary: "已输出 4 项异常清单并分配给财务团队。"
-      },
-      {
-        triggered_at: "2026-03-30 10:00",
-        result: "success",
-        summary: "巡检完成，无高优先级异常。"
+        summary: "已发送今日鼓励：节奏稳一点，专注一点，事情就会一点点向前走。"
       }
     ]
   },

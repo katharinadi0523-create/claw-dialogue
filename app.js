@@ -30,6 +30,7 @@
   const INTAKE_CLARIFY_END = 4;
   const CLARIFY_EXIT_DELAY_MS = 220;
   const ENTERPRISE_RUN_INTERVAL_MS = 900;
+  const DEFAULT_RECENTS_VISIBLE = 4;
   const DEFAULT_HEADER = {
     title: "上海出差报销申请",
     subtitle: "会话 ID: sess-expense-20260423 · 项目: 企业差旅运营"
@@ -65,6 +66,12 @@
     chatMode: "expense",
     currentStep: 0,
     sessions: recentTasks.map((task) => ({ ...task })),
+    automationSidebar: {
+      initialized: false,
+      expandedTaskIds: [],
+      activeTaskId: "",
+      activeRunId: ""
+    },
     enterprise: {
       query: "",
       category: "all",
@@ -92,7 +99,18 @@
     },
     ui: {
       composerProgressCollapsed: false,
-      workflowPaused: false
+      workflowPaused: false,
+      recentsExpanded: false
+    },
+    runtimeSend: {
+      mode: "queue",
+      menuOpen: false,
+      queue: [],
+      executed: [],
+      steers: [],
+      editingQueueId: "",
+      editDraft: "",
+      queueMenuId: ""
     },
     previewDrafts: {
       "bx-draft-7781-md": DEFAULT_MARKDOWN_DRAFT
@@ -134,6 +152,11 @@
     skillHoverTipText: document.getElementById("skillHoverTipText"),
     skillPickerBtn: document.getElementById("skillPickerBtn"),
     composerCard: document.getElementById("composerCard"),
+    runtimeQueueDock: document.getElementById("runtimeQueueDock"),
+    sendModeWrap: document.getElementById("sendModeWrap"),
+    sendModeButton: document.getElementById("sendModeButton"),
+    sendModeMenu: document.getElementById("sendModeMenu"),
+    sendModeLabel: document.getElementById("sendModeLabel"),
     rightPanel: document.getElementById("rightPanel"),
     rightPanelTabs: document.getElementById("rightPanelTabs"),
     overviewSection: document.getElementById("overviewSection"),
@@ -189,11 +212,13 @@
     if (window.AutomationTasksModule?.init) {
       window.AutomationTasksModule.init({ container: nodes.stream });
     }
+    syncAutomationSidebarState();
     bindEvents();
     initPanelResizer();
     initSkillPicker();
     window.__routeTo = (route) => navigate(route);
     window.addEventListener("hashchange", handleHashChange);
+    window.addEventListener("automation-tasks:updated", handleAutomationTasksUpdated);
     render();
   }
 
@@ -205,7 +230,43 @@
       navigate(routeButton.getAttribute("data-route"));
     }, true);
 
+    if (nodes.runtimeQueueDock) {
+      nodes.runtimeQueueDock.addEventListener("click", (event) => {
+        const runtimeAction = event.target.closest("[data-runtime-action]");
+        if (!runtimeAction) return;
+        event.preventDefault();
+        handleRuntimeQueueAction(runtimeAction.getAttribute("data-runtime-action"), runtimeAction.getAttribute("data-runtime-message-id"));
+      });
+
+      nodes.runtimeQueueDock.addEventListener("input", (event) => {
+        const queueEdit = event.target.closest("[data-runtime-queue-edit]");
+        if (!queueEdit) return;
+        state.runtimeSend.editDraft = queueEdit.value;
+      });
+
+      nodes.runtimeQueueDock.addEventListener("keydown", (event) => {
+        const queueEdit = event.target.closest("[data-runtime-queue-edit]");
+        if (!queueEdit) return;
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          event.preventDefault();
+          saveRuntimeQueueEdit(queueEdit.getAttribute("data-runtime-queue-edit"));
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cancelRuntimeQueueEdit();
+        }
+      });
+    }
+
     nodes.stream.addEventListener("click", (event) => {
+      const runtimeAction = event.target.closest("[data-runtime-action]");
+      if (runtimeAction) {
+        event.preventDefault();
+        handleRuntimeQueueAction(runtimeAction.getAttribute("data-runtime-action"), runtimeAction.getAttribute("data-runtime-message-id"));
+        return;
+      }
+
       const enterpriseTab = event.target.closest("[data-agent-tab]");
       if (enterpriseTab) {
         event.preventDefault();
@@ -243,6 +304,12 @@
     });
 
     nodes.stream.addEventListener("input", (event) => {
+      const queueEdit = event.target.closest("[data-runtime-queue-edit]");
+      if (queueEdit) {
+        state.runtimeSend.editDraft = queueEdit.value;
+        return;
+      }
+
       const searchInput = event.target.closest("[data-agent-search]");
       if (searchInput) {
         state.enterprise.query = searchInput.value || "";
@@ -251,6 +318,20 @@
     });
 
     nodes.stream.addEventListener("keydown", (event) => {
+      const queueEdit = event.target.closest("[data-runtime-queue-edit]");
+      if (queueEdit) {
+        if ((event.metaKey || event.ctrlKey) && event.key === "Enter") {
+          event.preventDefault();
+          saveRuntimeQueueEdit(queueEdit.getAttribute("data-runtime-queue-edit"));
+          return;
+        }
+        if (event.key === "Escape") {
+          event.preventDefault();
+          cancelRuntimeQueueEdit();
+          return;
+        }
+      }
+
       const clarifyInput = event.target.closest("[data-clarify-custom-input]");
       if (!clarifyInput) return;
       if (event.key !== "Enter") return;
@@ -259,6 +340,33 @@
     });
 
     nodes.recentTaskList.addEventListener("click", (event) => {
+      const groupToggle = event.target.closest("[data-session-group-toggle]");
+      if (groupToggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSessionGroup(groupToggle.getAttribute("data-session-group-toggle"));
+        return;
+      }
+
+      const automationToggle = event.target.closest("[data-automation-task-toggle]");
+      if (automationToggle) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleAutomationSidebarTask(automationToggle.getAttribute("data-automation-task-toggle"));
+        return;
+      }
+
+      const automationRun = event.target.closest("[data-automation-run-row]");
+      if (automationRun) {
+        event.preventDefault();
+        event.stopPropagation();
+        openAutomationRun(
+          automationRun.getAttribute("data-automation-task-id"),
+          automationRun.getAttribute("data-automation-run-row")
+        );
+        return;
+      }
+
       const trigger = event.target.closest("[data-session-menu-trigger]");
       if (trigger) {
         event.preventDefault();
@@ -321,12 +429,39 @@
     if (nodes.sendButton) {
       nodes.sendButton.addEventListener("click", (event) => {
         event.preventDefault();
+        if (canSubmitRuntimeMessage()) {
+          handleRuntimeComposerSubmit();
+          return;
+        }
         if (shouldShowComposerPauseButton()) {
           pauseComposerWorkflow();
           render();
           return;
         }
         handleComposerSubmit();
+      });
+    }
+
+    if (nodes.sendModeButton) {
+      nodes.sendModeButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (!canShowRuntimeSendControls()) return;
+        state.runtimeSend.menuOpen = !state.runtimeSend.menuOpen;
+        renderRuntimeSendControls();
+      });
+    }
+
+    if (nodes.sendModeMenu) {
+      nodes.sendModeMenu.addEventListener("click", (event) => {
+        const modeButton = event.target.closest("[data-runtime-send-mode]");
+        if (!modeButton) return;
+        event.preventDefault();
+        state.runtimeSend.mode = modeButton.getAttribute("data-runtime-send-mode") === "steer" ? "steer" : "queue";
+        state.runtimeSend.menuOpen = false;
+        renderRuntimeSendControls();
+        updateComposerSendButton();
+        nodes.composerTextarea.focus();
       });
     }
 
@@ -397,13 +532,36 @@
       if (state.renamingSessionId) commitSessionRename(state.renamingSessionId);
     });
 
+    document.addEventListener("mousedown", (event) => {
+      if (!state.runtimeSend.menuOpen) return;
+      if (event.target.closest("#sendModeWrap")) return;
+      state.runtimeSend.menuOpen = false;
+      renderRuntimeSendControls();
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (!state.runtimeSend.queueMenuId) return;
+      if (event.target.closest("#runtimeQueueDock")) return;
+      state.runtimeSend.queueMenuId = "";
+      renderRuntimeQueueDock();
+    });
+
     nodes.composerTextarea.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey) return;
       if (skillUI.open) return;
+      if (canSubmitRuntimeMessage()) {
+        event.preventDefault();
+        handleRuntimeComposerSubmit();
+        return;
+      }
       if (shouldShowComposerPauseButton()) {
         event.preventDefault();
         pauseComposerWorkflow();
         render();
+        return;
+      }
+      if (shouldDisableComposerSendButton()) {
+        event.preventDefault();
         return;
       }
       if (!canSubmitEnterpriseChat()) return;
@@ -413,6 +571,7 @@
 
     nodes.composerTextarea.addEventListener("input", () => {
       syncEnterpriseDraftQueryFromComposer();
+      updateComposerSendButton();
     });
   }
 
@@ -785,7 +944,7 @@
       state.enterprise.activeSessionId = active.id;
       const session = getEnterpriseSession(active.id);
       if (session) {
-        nodes.composerTextarea.value = session.query || "";
+        nodes.composerTextarea.value = "";
         if (session.status === "running" && session.phase < 6) {
           startEnterpriseRun(active.id);
         }
@@ -864,6 +1023,11 @@
   }
 
   function handleComposerSubmit() {
+    if (canSubmitRuntimeMessage()) {
+      handleRuntimeComposerSubmit();
+      return;
+    }
+
     if (state.chatMode === "expense" && state.ui.workflowPaused) {
       state.ui.workflowPaused = false;
       scheduleTransition();
@@ -928,7 +1092,7 @@
       ...state.sessions.map((task) => ({ ...task, active: false }))
     ];
 
-    nodes.composerTextarea.value = query;
+    nodes.composerTextarea.value = "";
     render();
     startEnterpriseRun(sessionId);
   }
@@ -1146,12 +1310,14 @@
   }
 
   function render() {
+    flushRuntimeQueueIfReady();
     syncShell();
     renderNotices();
     renderRecentTasks();
     renderMessages();
     renderRightPanel();
     renderComposerProgressDock();
+    renderRuntimeQueueDock();
     updateComposerSendButton();
     scrollStreamToBottom();
   }
@@ -1164,6 +1330,7 @@
     const shellPanelsHidden = state.route === "agents" || state.route === "automation";
     nodes.composerCard.hidden = shellPanelsHidden;
     if (nodes.composerProgressDock) nodes.composerProgressDock.hidden = shellPanelsHidden || !shouldShowComposerProgressDock();
+    if (nodes.runtimeQueueDock && shellPanelsHidden) nodes.runtimeQueueDock.hidden = true;
     nodes.rightPanel.hidden = shellPanelsHidden;
     if (nodes.panelResizer) nodes.panelResizer.hidden = shellPanelsHidden;
     nodes.appShell.style.setProperty("--right-panel-width", `${state.panel.width}px`);
@@ -1233,25 +1400,51 @@
 
   function renderRecentTasks() {
     if (!nodes.recentTaskList) return;
+    syncAutomationSidebarState();
     const pinned = state.sessions.filter((task) => task.pinned);
     const recents = state.sessions.filter((task) => !task.pinned);
+    const automationTasks = getAutomationSidebarTasks();
     nodes.recentTaskList.innerHTML = [
-      renderSessionGroup("Pinned", pinned, { empty: "Drag to pin", showPinHint: true }),
-      renderSessionGroup("Recents", recents, { meta: recents.length ? `${recents.length}` : "" })
+      renderSessionGroup("置顶", pinned, { empty: "暂无置顶会话", showPinHint: true }),
+      renderSessionGroup("最近", recents, {
+        meta: recents.length ? `${recents.length}` : "",
+        groupKey: "recents",
+        collapsible: recents.length > DEFAULT_RECENTS_VISIBLE,
+        expanded: state.ui.recentsExpanded,
+        collapsedCount: DEFAULT_RECENTS_VISIBLE
+      }),
+      renderAutomationTaskGroup(automationTasks)
     ].join("");
   }
 
   function renderSessionGroup(title, tasks, options = {}) {
+    const expanded = options.collapsible ? Boolean(options.expanded) : true;
+    const collapsedCount = Math.max(1, options.collapsedCount || DEFAULT_RECENTS_VISIBLE);
+    const visibleTasks = options.collapsible && !expanded ? tasks.slice(0, collapsedCount) : tasks;
+    const hiddenCount = Math.max(0, tasks.length - visibleTasks.length);
     return `<section class="session-group">
       <div class="session-group-header">
         <div class="session-group-title">
           ${options.showPinHint ? icon("pin") : ""}
           <span>${escapeHTML(title)}</span>
         </div>
-        ${options.meta ? `<span class="session-group-meta">${escapeHTML(String(options.meta))}</span>` : ""}
+        <div class="session-group-actions">
+          ${options.meta ? `<span class="session-group-meta">${escapeHTML(String(options.meta))}</span>` : ""}
+          ${options.collapsible
+            ? `<button
+                class="session-group-toggle ${expanded ? "expanded" : ""}"
+                type="button"
+                data-session-group-toggle="${escapeAttr(options.groupKey || "")}"
+                aria-expanded="${expanded ? "true" : "false"}"
+              >
+                <span>${expanded ? "收起" : `展开 ${hiddenCount} 条`}</span>
+                <span class="session-group-toggle-icon">${icon("chevron")}</span>
+              </button>`
+            : ""}
+        </div>
       </div>
       ${tasks.length
-        ? `<div class="session-list">${tasks.map((task) => renderSessionRow(task)).join("")}</div>`
+        ? `<div class="session-list">${visibleTasks.map((task) => renderSessionRow(task)).join("")}</div>`
         : `<div class="session-group-empty">${options.showPinHint ? icon("pin") : ""}<span>${escapeHTML(options.empty || "暂无会话")}</span></div>`}
     </section>`;
   }
@@ -1294,6 +1487,67 @@
     </div>`;
   }
 
+  function renderAutomationTaskGroup(tasks) {
+    return `<section class="session-group">
+      <div class="session-group-header">
+        <div class="session-group-title">
+          ${icon("clock")}
+          <span>自动化任务</span>
+        </div>
+        <div class="session-group-actions">
+          ${tasks.length ? `<span class="session-group-meta">${escapeHTML(String(tasks.length))}</span>` : ""}
+        </div>
+      </div>
+      ${tasks.length
+        ? `<div class="automation-task-tree">${tasks.map((task) => renderAutomationTaskRow(task)).join("")}</div>`
+        : `<div class="session-group-empty">${icon("clock")}<span>暂无自动化任务</span></div>`}
+    </section>`;
+  }
+
+  function renderAutomationTaskRow(task) {
+    const expanded = state.automationSidebar.expandedTaskIds.includes(task.id);
+    return `<article class="automation-workspace-item ${expanded ? "expanded" : ""}">
+      <button
+        class="automation-workspace-folder"
+        type="button"
+        data-automation-task-toggle="${escapeAttr(task.id)}"
+        aria-expanded="${expanded ? "true" : "false"}"
+        title="${escapeAttr(task.workspaceName)}"
+      >
+        <span class="automation-workspace-folder-icon">${icon("folder")}</span>
+        <span class="automation-workspace-folder-name">${escapeHTML(task.workspaceName)}</span>
+      </button>
+      ${expanded ? renderAutomationRunList(task) : ""}
+    </article>`;
+  }
+
+  function renderAutomationRunList(task) {
+    if (!task.runs.length) {
+      return `<div class="automation-run-empty">TaskThread 暂无执行记录</div>`;
+    }
+    return `<div class="automation-run-list">
+      ${task.runs.map((run) => renderAutomationRunRow(task, run)).join("")}
+    </div>`;
+  }
+
+  function renderAutomationRunRow(task, run) {
+    const active =
+      state.route === "automation" &&
+      state.automationSidebar.activeTaskId === task.id &&
+      state.automationSidebar.activeRunId === run.id;
+    return `<button
+      class="automation-run-row ${active ? "active" : ""}"
+      type="button"
+      data-automation-task-id="${escapeAttr(task.id)}"
+      data-automation-run-row="${escapeAttr(run.id)}"
+      title="${escapeAttr(run.summary || `${run.title} · ${run.timeLabel}`)}"
+    >
+      <span class="automation-run-glyph ${escapeAttr(run.status)}">${automationRunStatusIcon(run.status)}</span>
+      <span class="automation-run-label">${escapeHTML(run.title)}</span>
+      <span class="automation-run-time">${escapeHTML(run.timeLabel)}</span>
+    </button>`;
+  }
+
   function renderMessages() {
     if (state.route === "agents") {
       nodes.stream.innerHTML = renderEnterpriseAgentsPage();
@@ -1314,7 +1568,11 @@
       return;
     }
 
-    const html = getVisibleSteps().map((step) => renderStepItems(step)).join("");
+    const html = [
+      getVisibleSteps().map((step) => renderStepItems(step)).join(""),
+      renderRuntimeSteerMessages(),
+      renderRuntimeExecutedQueueMessages()
+    ].join("");
     nodes.stream.innerHTML = html;
   }
 
@@ -1466,6 +1724,8 @@
       parts.push(renderNarration({ text: preset.finalMessage }));
     }
 
+    parts.push(renderRuntimeSteerMessages(), renderRuntimeExecutedQueueMessages());
+
     return parts.join("");
   }
 
@@ -1554,8 +1814,10 @@
 
   function renderUserMessage(item) {
     const attachments = Array.isArray(item.attachments) ? item.attachments : [];
+    const metaLabel = typeof item.runtimeLabel === "string" ? item.runtimeLabel.trim() : "";
     return `<div class="message-row user">
       <article class="user-message">
+        ${metaLabel ? `<div class="user-message-meta">${escapeHTML(metaLabel)}</div>` : ""}
         ${attachments.length
           ? `<div class="attachment-row">
           ${attachments.map((file) => `<span class="attachment-pill">${icon("attach")}<span>${escapeHTML(file)}</span></span>`).join("")}
@@ -2047,6 +2309,338 @@
     </div>`;
   }
 
+  function getComposerDraftText() {
+    return (nodes.composerTextarea?.value || "").trim();
+  }
+
+  function getRuntimeScopeKey() {
+    if (state.route !== "chat") return "";
+    if (state.chatMode === "expense") return "expense";
+    if (state.chatMode === "enterprise_session" && state.enterprise.activeSessionId) {
+      return `enterprise:${state.enterprise.activeSessionId}`;
+    }
+    return "";
+  }
+
+  function isRuntimeExecutionPaused() {
+    if (state.chatMode === "expense") return Boolean(state.ui.workflowPaused);
+    if (state.chatMode === "enterprise_session") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      return session?.status === "paused";
+    }
+    return false;
+  }
+
+  function canShowRuntimeSendControls() {
+    return Boolean(getRuntimeScopeKey() && isAgentTaskExecutionWindow() && !isRuntimeExecutionPaused());
+  }
+
+  function canSubmitRuntimeMessage() {
+    return Boolean(canShowRuntimeSendControls() && getComposerDraftText());
+  }
+
+  function getRuntimeAnchor() {
+    if (state.chatMode === "enterprise_session") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      return { kind: "enterprise", phase: session?.phase || 0 };
+    }
+    return { kind: "expense", step: state.currentStep };
+  }
+
+  function getRuntimeAnchorLabel(anchor = getRuntimeAnchor()) {
+    if (anchor.kind === "enterprise") return `Phase ${anchor.phase}`;
+    return `Step ${anchor.step}`;
+  }
+
+  function createRuntimeMessageId(prefix) {
+    return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  }
+
+  function handleRuntimeComposerSubmit() {
+    const text = getComposerDraftText();
+    const scope = getRuntimeScopeKey();
+    if (!text || !scope) return;
+
+    const mode = state.runtimeSend.mode === "steer" ? "steer" : "queue";
+    const message = {
+      id: createRuntimeMessageId(`runtime-${mode}`),
+      scope,
+      text,
+      anchor: getRuntimeAnchor(),
+      createdLabel: getRuntimeAnchorLabel(),
+      createdAt: Date.now()
+    };
+
+    if (mode === "steer") {
+      state.runtimeSend.steers.push(message);
+    } else {
+      state.runtimeSend.queue.push(message);
+    }
+
+    state.runtimeSend.menuOpen = false;
+    state.runtimeSend.editingQueueId = "";
+    state.runtimeSend.editDraft = "";
+    state.runtimeSend.queueMenuId = "";
+    nodes.composerTextarea.value = "";
+    render();
+    nodes.composerTextarea.focus();
+  }
+
+  function getCurrentRuntimeQueue() {
+    const scope = getRuntimeScopeKey();
+    if (!scope) return [];
+    return state.runtimeSend.queue.filter((item) => item.scope === scope);
+  }
+
+  function getCurrentRuntimeSteers() {
+    const scope = getRuntimeScopeKey();
+    if (!scope) return [];
+    return state.runtimeSend.steers.filter((item) => item.scope === scope);
+  }
+
+  function getCurrentRuntimeExecutedQueue() {
+    const scope = getRuntimeScopeKey();
+    if (!scope) return [];
+    return state.runtimeSend.executed.filter((item) => item.scope === scope);
+  }
+
+  function isRuntimeQueueReadyForExecution() {
+    const scope = getRuntimeScopeKey();
+    if (!scope || state.route !== "chat") return false;
+    if (scope === "expense") return state.currentStep >= totalSteps;
+    if (state.chatMode === "enterprise_session") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      return Boolean(session && (session.status === "completed" || session.phase >= 6));
+    }
+    return false;
+  }
+
+  function flushRuntimeQueueIfReady() {
+    if (!isRuntimeQueueReadyForExecution()) return;
+    const scope = getRuntimeScopeKey();
+    const moved = [];
+    state.runtimeSend.queue = state.runtimeSend.queue.filter((item) => {
+      if (item.scope !== scope) return true;
+      moved.push(item);
+      return false;
+    });
+    if (!moved.length) return;
+
+    const baseIndex = getCurrentRuntimeExecutedQueue().length;
+    state.runtimeSend.executed.push(
+      ...moved.map((item, index) => ({
+        ...item,
+        executedQueueIndex: baseIndex + index + 1,
+        executedLabel: "队列执行"
+      }))
+    );
+
+    if (moved.some((item) => item.id === state.runtimeSend.editingQueueId)) {
+      state.runtimeSend.editingQueueId = "";
+      state.runtimeSend.editDraft = "";
+    }
+    if (moved.some((item) => item.id === state.runtimeSend.queueMenuId)) {
+      state.runtimeSend.queueMenuId = "";
+    }
+  }
+
+  function handleRuntimeQueueAction(action, id) {
+    if (action === "cancel-edit") {
+      cancelRuntimeQueueEdit();
+      return;
+    }
+    if (!id) return;
+    if (action === "toggle-more") {
+      state.runtimeSend.queueMenuId = state.runtimeSend.queueMenuId === id ? "" : id;
+      renderRuntimeQueueDock();
+    } else if (action === "steer-from-queue") {
+      steerRuntimeQueueMessage(id);
+    } else if (action === "edit") {
+      beginRuntimeQueueEdit(id);
+    } else if (action === "save-edit") {
+      saveRuntimeQueueEdit(id);
+    } else if (action === "delete") {
+      deleteRuntimeQueueMessage(id);
+    } else if (action === "move-up") {
+      moveRuntimeQueueMessage(id, -1);
+    } else if (action === "move-down") {
+      moveRuntimeQueueMessage(id, 1);
+    }
+  }
+
+  function beginRuntimeQueueEdit(id) {
+    const message = state.runtimeSend.queue.find((item) => item.id === id);
+    if (!message) return;
+    state.runtimeSend.editingQueueId = id;
+    state.runtimeSend.editDraft = message.text;
+    state.runtimeSend.queueMenuId = "";
+    render();
+    window.requestAnimationFrame(() => {
+      const editor = (nodes.runtimeQueueDock || nodes.stream).querySelector(`[data-runtime-queue-edit="${id}"]`);
+      if (!editor) return;
+      editor.focus();
+      editor.setSelectionRange(editor.value.length, editor.value.length);
+    });
+  }
+
+  function saveRuntimeQueueEdit(id) {
+    const text = state.runtimeSend.editDraft.trim();
+    if (!text) {
+      const editor = (nodes.runtimeQueueDock || nodes.stream).querySelector(`[data-runtime-queue-edit="${id}"]`);
+      editor?.focus();
+      return;
+    }
+    const message = state.runtimeSend.queue.find((item) => item.id === id);
+    if (message) message.text = text;
+    state.runtimeSend.editingQueueId = "";
+    state.runtimeSend.editDraft = "";
+    render();
+  }
+
+  function cancelRuntimeQueueEdit() {
+    if (!state.runtimeSend.editingQueueId) return;
+    state.runtimeSend.editingQueueId = "";
+    state.runtimeSend.editDraft = "";
+    render();
+  }
+
+  function deleteRuntimeQueueMessage(id) {
+    state.runtimeSend.queue = state.runtimeSend.queue.filter((item) => item.id !== id);
+    if (state.runtimeSend.editingQueueId === id) {
+      state.runtimeSend.editingQueueId = "";
+      state.runtimeSend.editDraft = "";
+    }
+    if (state.runtimeSend.queueMenuId === id) state.runtimeSend.queueMenuId = "";
+    render();
+  }
+
+  function steerRuntimeQueueMessage(id) {
+    const index = state.runtimeSend.queue.findIndex((item) => item.id === id);
+    if (index < 0) return;
+    const [message] = state.runtimeSend.queue.splice(index, 1);
+    state.runtimeSend.steers.push({
+      ...message,
+      id: createRuntimeMessageId("runtime-steer"),
+      anchor: getRuntimeAnchor(),
+      createdLabel: getRuntimeAnchorLabel(),
+      createdAt: Date.now()
+    });
+    if (state.runtimeSend.editingQueueId === id) {
+      state.runtimeSend.editingQueueId = "";
+      state.runtimeSend.editDraft = "";
+    }
+    if (state.runtimeSend.queueMenuId === id) state.runtimeSend.queueMenuId = "";
+    render();
+  }
+
+  function moveRuntimeQueueMessage(id, delta) {
+    const scopedQueue = getCurrentRuntimeQueue();
+    const scopedIndex = scopedQueue.findIndex((item) => item.id === id);
+    const target = scopedQueue[scopedIndex + delta];
+    if (!target) return;
+
+    const sourceIndex = state.runtimeSend.queue.findIndex((item) => item.id === id);
+    const targetIndex = state.runtimeSend.queue.findIndex((item) => item.id === target.id);
+    if (sourceIndex < 0 || targetIndex < 0) return;
+
+    const nextQueue = state.runtimeSend.queue.slice();
+    [nextQueue[sourceIndex], nextQueue[targetIndex]] = [nextQueue[targetIndex], nextQueue[sourceIndex]];
+    state.runtimeSend.queue = nextQueue;
+    state.runtimeSend.queueMenuId = "";
+    render();
+  }
+
+  function getRuntimeSteerStatus(message) {
+    if (message.anchor?.kind === "enterprise") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      const consumed = Boolean(session && session.phase > (message.anchor.phase || 0));
+      return consumed
+        ? { className: "consumed", label: `已在 Phase ${Math.min((message.anchor.phase || 0) + 1, 6)} 前读取` }
+        : { className: "pending", label: "等待下一 Step / Tool 调用前读取" };
+    }
+
+    const anchorStep = message.anchor?.step || 0;
+    const consumed = state.currentStep > anchorStep;
+    return consumed
+      ? { className: "consumed", label: `已在 Step ${Math.min(anchorStep + 1, totalSteps)} 前读取` }
+      : { className: "pending", label: "等待下一 Step / Tool 调用前读取" };
+  }
+
+  function renderRuntimeSteerMessages() {
+    const steers = getCurrentRuntimeSteers();
+    if (!steers.length) return "";
+    return steers.map((message) => {
+      const status = getRuntimeSteerStatus(message);
+      return `<div class="message-row runtime-steer-row">
+        <article class="runtime-steer-message">
+          <div class="runtime-steer-meta">
+            <span class="runtime-steer-arrow">↳</span>
+            <span>运行中插入</span>
+            <span class="runtime-steer-status ${escapeAttr(status.className)}">${escapeHTML(status.label)}</span>
+          </div>
+          <div class="runtime-steer-text">${escapeHTML(message.text)}</div>
+          <div class="runtime-steer-note">不重置当前任务,保持 Agent 上下文与执行状态连续。</div>
+        </article>
+      </div>`;
+    }).join("");
+  }
+
+  function renderRuntimeExecutedQueueMessages() {
+    return getCurrentRuntimeExecutedQueue()
+      .map((message) =>
+        renderUserMessage({
+          text: message.text,
+          attachments: [],
+          runtimeLabel: `${message.executedLabel || "队列执行"} · #${message.executedQueueIndex || 1}`
+        })
+      )
+      .join("");
+  }
+
+  function renderRuntimeQueueDock() {
+    if (!nodes.runtimeQueueDock) return;
+    if (state.route !== "chat") {
+      nodes.runtimeQueueDock.hidden = true;
+      nodes.runtimeQueueDock.innerHTML = "";
+      return;
+    }
+    const queue = getCurrentRuntimeQueue();
+    nodes.runtimeQueueDock.hidden = !queue.length;
+    nodes.runtimeQueueDock.innerHTML = queue.length
+      ? queue.map((message, index) => renderRuntimeQueueStrip(message, index, queue.length)).join("")
+      : "";
+  }
+
+  function renderRuntimeQueueStrip(message, index, total) {
+    const editing = state.runtimeSend.editingQueueId === message.id;
+    const menuOpen = state.runtimeSend.queueMenuId === message.id;
+    const order = index + 1;
+    const moveUpDisabled = index === 0 ? " disabled" : "";
+    const moveDownDisabled = index === total - 1 ? " disabled" : "";
+    return `<article class="runtime-queue-strip">
+      <div class="runtime-queue-main">
+        <span class="runtime-queue-turn" aria-hidden="true">↳</span>
+        <span class="runtime-queue-order">待执行 #${order}</span>
+        ${editing
+          ? `<textarea class="runtime-queue-edit" data-runtime-queue-edit="${escapeAttr(message.id)}" rows="2">${escapeHTML(state.runtimeSend.editDraft)}</textarea>`
+          : `<span class="runtime-queue-text">${escapeHTML(message.text)}</span>`}
+      </div>
+      <div class="runtime-queue-actions">
+        ${editing
+          ? `<button class="runtime-queue-action primary" type="button" data-runtime-action="save-edit" data-runtime-message-id="${escapeAttr(message.id)}">保存</button>
+            <button class="runtime-queue-action" type="button" data-runtime-action="cancel-edit">取消</button>`
+          : `<button class="runtime-queue-action steer" type="button" data-runtime-action="steer-from-queue" data-runtime-message-id="${escapeAttr(message.id)}">↳ 引导</button>
+            <button class="runtime-queue-icon-action" type="button" aria-label="删除待执行消息" title="删除" data-runtime-action="delete" data-runtime-message-id="${escapeAttr(message.id)}">${icon("trash")}</button>
+            <button class="runtime-queue-icon-action" type="button" aria-label="更多操作" title="更多" aria-expanded="${menuOpen ? "true" : "false"}" data-runtime-action="toggle-more" data-runtime-message-id="${escapeAttr(message.id)}">${icon("more")}</button>
+            ${menuOpen ? `<div class="runtime-queue-more-menu">
+              <button type="button" data-runtime-action="edit" data-runtime-message-id="${escapeAttr(message.id)}">编辑</button>
+              <button type="button" data-runtime-action="move-up" data-runtime-message-id="${escapeAttr(message.id)}"${moveUpDisabled}>上移</button>
+              <button type="button" data-runtime-action="move-down" data-runtime-message-id="${escapeAttr(message.id)}"${moveDownDisabled}>下移</button>
+            </div>` : ""}`}
+      </div>
+    </article>`;
+  }
+
   function renderRightPanel() {
     if (state.route === "agents" || state.route === "automation") return;
     if (state.chatMode === "enterprise_draft" || state.chatMode === "enterprise_session") {
@@ -2088,12 +2682,19 @@
           .join("")
       : `<div class="panel-empty">暂无文件</div>`;
 
-    const contexts = [
-      agent ? { icon: "agent", name: agent.name, meta: "企业级智能体" } : null,
-      phase >= 1 ? { icon: "skill", name: "执行方案", meta: preset.planningText } : null,
-      phase >= 3 && preset.stages[0] ? { icon: "branch", name: preset.stages[0].title, meta: "阶段执行中" } : null,
-      phase >= 4 && preset.stages[1] ? { icon: "doc", name: preset.stages[1].title, meta: phase >= 5 ? "阶段完成" : "阶段执行中" } : null
-    ].filter(Boolean);
+    const contexts = [];
+    if (phase >= 1 && preset.planningText) {
+      contexts.push({ icon: "skill", name: "执行方案", meta: preset.planningText });
+    }
+    (preset.planItems || []).forEach((item, idx) => {
+      if (phase < idx + 2) return;
+      const done = phase >= idx + 3;
+      contexts.push({
+        icon: "terminal",
+        name: item.tool || "工具调用",
+        meta: done ? `已完成 · ${item.title}` : `${item.title} · ${item.eta || ""}`.trim()
+      });
+    });
 
     nodes.contextCount.textContent = String(contexts.length);
     nodes.contextList.innerHTML = contexts.length
@@ -2304,11 +2905,10 @@
     if (state.currentStep >= 15) {
       contexts.push({ icon: "globe", name: "ERP 连接器", meta: draftCreated ? "草稿创建完成" : "正在创建草稿" });
     }
-    if (state.currentStep >= 16) contexts.push({ icon: "branch", name: "子任务结果", meta: "组织信息与差旅标准" });
     if (state.currentStep >= 17) contexts.push({ icon: "globe", name: "ERP 写入授权", meta: "等待或完成授权" });
     if (state.currentStep >= 22) contexts.push({ icon: "globe", name: "OA 审批", meta: "提交成功" });
-    if (state.currentStep >= 24) contexts.push({ icon: "doc", name: "本地文档生成", meta: state.currentStep >= 32 ? "草稿已删除" : "差旅申请草稿.docx" });
-    if (state.currentStep >= 29) contexts.push({ icon: "file", name: "破坏性确认", meta: state.currentStep >= 30 ? "本地文件删除完成" : "等待删除确认" });
+    if (state.currentStep >= 24)
+      contexts.push({ icon: "doc", name: "本地文档生成", meta: state.currentStep >= 32 ? "草稿已删除" : "差旅申请草稿.docx" });
 
     nodes.contextCount.textContent = String(contexts.length);
     nodes.contextList.innerHTML = contexts.length
@@ -2391,8 +2991,40 @@
     nodes.previewBody.innerHTML = `<div class="preview-empty-state"><strong>预览区已就绪</strong><span>${escapeHTML(text)}</span></div>`;
   }
 
+  /** 用户已发起消息后，直至 Agent 跑完整条流程（差旅 demo 或未结束的企业会话）。 */
+  function isAgentTaskExecutionWindow() {
+    if (state.route === "agents" || state.route === "automation") return false;
+    if (state.chatMode === "enterprise_draft") return false;
+
+    if (state.chatMode === "enterprise_session") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      if (!session) return false;
+      if (session.status === "completed" || session.phase >= 6) return false;
+      return true;
+    }
+
+    if (state.chatMode === "expense") {
+      return state.currentStep >= 1 && state.currentStep < totalSteps;
+    }
+
+    return false;
+  }
+
+  function shouldDisableComposerSendButton() {
+    if (!isAgentTaskExecutionWindow()) return false;
+    if (canSubmitRuntimeMessage()) return false;
+    if (shouldShowComposerPauseButton()) return false;
+    if (state.chatMode === "enterprise_session") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      if (session?.status === "paused") return false;
+    }
+    if (state.chatMode === "expense" && state.ui.workflowPaused) return false;
+    return true;
+  }
+
   function shouldShowComposerPauseButton() {
     if (state.route === "agents" || state.route === "automation") return false;
+    if (canShowRuntimeSendControls() && getComposerDraftText()) return false;
 
     if (state.chatMode === "enterprise_session") {
       const session = getEnterpriseSession(state.enterprise.activeSessionId);
@@ -2426,12 +3058,72 @@
 
   function updateComposerSendButton() {
     if (!nodes.sendButton) return;
-    const pauseMode = shouldShowComposerPauseButton();
+    renderRuntimeSendControls();
+    const runtimeSubmit = canSubmitRuntimeMessage();
+    const pauseMode = !runtimeSubmit && shouldShowComposerPauseButton();
+    const enterpriseSession =
+      state.chatMode === "enterprise_session" ? getEnterpriseSession(state.enterprise.activeSessionId) : null;
+
     const useEl = nodes.sendButton.querySelector("use");
     if (useEl) useEl.setAttribute("href", pauseMode ? "#icon-pause" : "#icon-send");
     nodes.sendButton.classList.toggle("is-pause", pauseMode);
-    nodes.sendButton.title = pauseMode ? "暂停" : "发送";
-    nodes.sendButton.setAttribute("aria-label", pauseMode ? "暂停任务" : "发送");
+
+    const disable = shouldDisableComposerSendButton();
+    nodes.sendButton.disabled = disable;
+
+    const expenseResume = state.chatMode === "expense" && state.ui.workflowPaused;
+    const enterpriseResume =
+      state.chatMode === "enterprise_session" && enterpriseSession?.status === "paused";
+
+    let title = "发送";
+    let ariaLabel = "发送";
+    if (pauseMode) {
+      title = "暂停";
+      ariaLabel = "暂停任务";
+    } else if (runtimeSubmit) {
+      title = state.runtimeSend.mode === "steer" ? "引导发送" : "加入队列";
+      ariaLabel = title;
+    } else if (enterpriseResume) {
+      title = "继续执行任务";
+      ariaLabel = "继续执行任务";
+    } else if (expenseResume) {
+      title = "继续执行";
+      ariaLabel = "继续执行任务流";
+    } else if (disable && canShowRuntimeSendControls()) {
+      title = "输入新消息后可加入队列或引导发送";
+      ariaLabel = "输入新消息后发送";
+    } else if (disable) {
+      title = "任务执行中，完成后可发送新消息";
+      ariaLabel = "任务执行中，暂不可发送";
+    }
+
+    nodes.sendButton.title = title;
+    nodes.sendButton.setAttribute("aria-label", ariaLabel);
+  }
+
+  function renderRuntimeSendControls() {
+    if (!nodes.sendModeWrap) return;
+    const visible = canShowRuntimeSendControls();
+    nodes.sendModeWrap.hidden = !visible;
+    if (!visible) {
+      state.runtimeSend.menuOpen = false;
+    }
+
+    const mode = state.runtimeSend.mode === "steer" ? "steer" : "queue";
+    if (nodes.sendModeLabel) {
+      nodes.sendModeLabel.textContent = mode === "steer" ? "引导发送" : "加入队列";
+    }
+    if (nodes.sendModeButton) {
+      nodes.sendModeButton.setAttribute("aria-expanded", visible && state.runtimeSend.menuOpen ? "true" : "false");
+    }
+    if (nodes.sendModeMenu) {
+      nodes.sendModeMenu.hidden = !visible || !state.runtimeSend.menuOpen;
+      nodes.sendModeMenu.querySelectorAll("[data-runtime-send-mode]").forEach((button) => {
+        const active = button.getAttribute("data-runtime-send-mode") === mode;
+        button.classList.toggle("active", active);
+        button.setAttribute("aria-checked", active ? "true" : "false");
+      });
+    }
   }
 
   function getTodoStatus(index) {
@@ -2815,6 +3507,112 @@
     return map[status] || "";
   }
 
+  function automationRunStatusIcon(status) {
+    const normalized = status || "idle";
+    if (normalized === "running") return '<span class="spinner"></span>';
+    if (normalized === "error") return icon("warning");
+    if (normalized === "awaiting") return icon("clock");
+    return icon("check");
+  }
+
+  function mapAutomationStatus(status) {
+    if (status === "success") return "completed";
+    if (status === "failed") return "error";
+    if (status === "never") return "idle";
+    return status || "idle";
+  }
+
+  function parseDateTime(value) {
+    if (!value) return null;
+    const parsed = new Date(String(value).trim().replace(" ", "T"));
+    return Number.isNaN(parsed.getTime()) ? null : parsed;
+  }
+
+  function formatRelativeDateTime(value) {
+    const date = parseDateTime(value);
+    if (!date) return "未执行";
+    const diffMs = Date.now() - date.getTime();
+    if (diffMs <= 0) return "刚刚";
+    const diffMinutes = Math.floor(diffMs / 60000);
+    if (diffMinutes < 60) return diffMinutes <= 1 ? "刚刚" : `${diffMinutes}分钟前`;
+    const diffHours = Math.floor(diffMinutes / 60);
+    if (diffHours < 24) return `${diffHours}小时前`;
+    const diffDays = Math.floor(diffHours / 24);
+    if (diffDays < 30) return `${diffDays}天前`;
+    return String(value).slice(0, 10);
+  }
+
+  function buildAutomationRunId(taskId, index) {
+    return `${taskId}::run-${index + 1}`;
+  }
+
+  function deriveAutomationWorkspaceName(task) {
+    if (task.workspace_name) return task.workspace_name;
+    const stamp =
+      String(task.last_run_at || "")
+        .replace(/\D/g, "")
+        .slice(0, 12) || "202604211305";
+    return `automation-${stamp}`;
+  }
+
+  function getAutomationTaskSource() {
+    if (window.AutomationTasksModule?.getTasks) {
+      return window.AutomationTasksModule.getTasks();
+    }
+    return Array.isArray(window.AUTOMATION_TASKS_MOCK) ? window.AUTOMATION_TASKS_MOCK : [];
+  }
+
+  function getAutomationSidebarTasks() {
+    return getAutomationTaskSource().map((task) => {
+      const runs = Array.isArray(task.recent_runs)
+        ? task.recent_runs.slice(0, 5).map((run, index) => ({
+            id: buildAutomationRunId(task.id, index),
+            title: task.name || `自动化任务 ${index + 1}`,
+            timeLabel: run.sidebar_relative || formatRelativeDateTime(run.triggered_at),
+            status: mapAutomationStatus(run.result),
+            summary: run.summary || ""
+          }))
+        : [];
+      return {
+        id: task.id,
+        title: task.name || "未命名任务",
+        workspaceName: deriveAutomationWorkspaceName(task),
+        triggerSummary: task.trigger_summary || "",
+        status: mapAutomationStatus(task.last_run_status),
+        runs
+      };
+    });
+  }
+
+  function syncAutomationSidebarState() {
+    const tasks = getAutomationSidebarTasks();
+    const taskIds = new Set(tasks.map((task) => task.id));
+    const previousExpandedCount = state.automationSidebar.expandedTaskIds.length;
+    state.automationSidebar.expandedTaskIds = state.automationSidebar.expandedTaskIds.filter((id) => taskIds.has(id));
+    const needsDefaultExpansion =
+      !state.automationSidebar.initialized ||
+      (previousExpandedCount > 0 && !state.automationSidebar.expandedTaskIds.length && tasks.length > 0);
+    if (needsDefaultExpansion && !state.automationSidebar.expandedTaskIds.length) {
+      const firstRunnableTask = tasks.find((task) => task.runs.length) || tasks[0];
+      state.automationSidebar.expandedTaskIds = firstRunnableTask ? [firstRunnableTask.id] : [];
+    }
+    state.automationSidebar.initialized = true;
+
+    if (!taskIds.has(state.automationSidebar.activeTaskId)) {
+      state.automationSidebar.activeTaskId = "";
+    }
+
+    const activeTask = tasks.find((task) => task.id === state.automationSidebar.activeTaskId);
+    if (!activeTask?.runs.some((run) => run.id === state.automationSidebar.activeRunId)) {
+      state.automationSidebar.activeRunId = "";
+    }
+  }
+
+  function handleAutomationTasksUpdated() {
+    syncAutomationSidebarState();
+    renderRecentTasks();
+  }
+
   function resolveAnswerLabel(entry) {
     const raw = state.answers[entry.answerKey];
     if (isCustomAnswer(raw)) {
@@ -2862,6 +3660,37 @@
     }
     state.sessionMenuId = state.sessionMenuId === id ? null : id;
     renderRecentTasks();
+  }
+
+  function toggleAutomationSidebarTask(id) {
+    if (!id) return;
+    closeSessionMenu(false);
+    const expanded = state.automationSidebar.expandedTaskIds.includes(id);
+    state.automationSidebar.expandedTaskIds = expanded
+      ? state.automationSidebar.expandedTaskIds.filter((taskId) => taskId !== id)
+      : state.automationSidebar.expandedTaskIds.concat(id);
+    if (expanded && state.automationSidebar.activeTaskId === id) {
+      state.automationSidebar.activeRunId = "";
+    }
+    renderRecentTasks();
+  }
+
+  function toggleSessionGroup(groupKey) {
+    if (groupKey !== "recents") return;
+    closeSessionMenu(false);
+    state.ui.recentsExpanded = !state.ui.recentsExpanded;
+    renderRecentTasks();
+  }
+
+  function openAutomationRun(taskId, runId) {
+    if (!taskId || !runId) return;
+    closeSessionMenu(false);
+    if (!state.automationSidebar.expandedTaskIds.includes(taskId)) {
+      state.automationSidebar.expandedTaskIds = state.automationSidebar.expandedTaskIds.concat(taskId);
+    }
+    state.automationSidebar.activeTaskId = taskId;
+    state.automationSidebar.activeRunId = runId;
+    navigate("automation");
   }
 
   function closeSessionMenu(shouldRender = true) {
@@ -2963,7 +3792,7 @@
       state.enterprise.activeSessionId = target.id;
       state.enterprise.draftAgentId = target.enterpriseAgentId || getEnterpriseSession(target.id)?.agentId || "";
       const session = getEnterpriseSession(target.id);
-      nodes.composerTextarea.value = session?.query || "";
+      nodes.composerTextarea.value = "";
       if (session?.status === "running" && session.phase < 6) {
         startEnterpriseRun(target.id);
       }

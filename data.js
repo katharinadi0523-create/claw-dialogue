@@ -382,7 +382,7 @@ const DEMO_DATA = (() => {
       type: "input_composer",
       schema: {
         project_id: "proj-travel-ops",
-        supports: ["attachments", "skill_mentions", "skill_picker", "stop", "steer"]
+        supports: ["attachments", "skill_mentions", "skill_picker", "stop", "queue", "steer"]
       }
     },
     stepper: {

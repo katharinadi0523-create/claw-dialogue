@@ -31,6 +31,7 @@ python3 -m http.server 4173
 - 使用键盘 `→` 逐步推进 32 个节点。
 - 使用键盘 `←` 回退到上一步。
 - 遇到审批、澄清、重试、破坏性确认等 HITL 节点时,也可以直接点击卡片里的按钮继续流转。
+- Agent 执行中仍可在 Composer 输入新消息,通过发送模式选择「加入队列」或「引导发送」。
 
 ## 如何扩展步骤
 
@@ -67,6 +68,7 @@ python3 -m http.server 4173
 ## 已覆盖的关键元素
 
 - 用户消息、Agent 叙述、模型思考、Plan、Todo List。
+- Agent 运行中发送: Queue 待执行队列、Steer 运行中插入引导。
 - 工具卡 9 种状态: pending、running、success 折叠、success 展开、needs approval、destructive confirmation、error、cancelled、computer use。
 - Clarify HITL、Skill chip、Sub-agent 并行任务组、Final Summary、Artifact Card。
 - Context / 网络 / 用量限额三类正交通知。

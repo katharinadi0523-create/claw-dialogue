@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>ClawAgent v1.0 · 企业 AI 工作代理原型</title>
-    <link rel="stylesheet" href="styles.css?v=20260429-9" />
+    <link rel="stylesheet" href="styles.css?v=20260430-9" />
   </head>
   <body>
     <svg class="svg-sprite" aria-hidden="true">
@@ -156,6 +156,10 @@
       <symbol id="icon-cloud" viewBox="0 0 24 24">
         <path d="M8 18h9a4 4 0 0 0 .5-8 6 6 0 0 0-11.3 2A3 3 0 0 0 8 18Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
       </symbol>
+      <symbol id="icon-folder" viewBox="0 0 24 24">
+        <path d="M4 7.5h5l1.8 2H20v7.8A2.2 2.2 0 0 1 17.8 19.5H6.2A2.2 2.2 0 0 1 4 17.3V7.5Z" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round" />
+        <path d="M4 9.5h16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" />
+      </symbol>
       <symbol id="icon-pin" viewBox="0 0 24 24">
         <path d="M8 5.5h8M10 5.5v4l-2.5 3h9L14 9.5v-4M12 12.5v6" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
       </symbol>
@@ -247,6 +251,8 @@
           </div>
         </section>
 
+        <section class="runtime-queue-dock" id="runtimeQueueDock" aria-label="待执行队列" hidden></section>
+
         <section class="composer-card" id="composerCard">
           <div class="composer-input-wrap">
             <textarea
@@ -279,6 +285,28 @@
               <button class="voice-button" type="button" title="语音输入" aria-label="语音输入">
                 <svg><use href="#icon-mic"></use></svg>
               </button>
+              <div class="send-mode-wrap" id="sendModeWrap" hidden>
+                <button
+                  class="send-mode-button"
+                  id="sendModeButton"
+                  type="button"
+                  aria-haspopup="menu"
+                  aria-expanded="false"
+                >
+                  <span id="sendModeLabel">加入队列</span>
+                  <svg><use href="#icon-chevron"></use></svg>
+                </button>
+                <div class="send-mode-menu" id="sendModeMenu" role="menu" hidden>
+                  <button type="button" role="menuitemradio" data-runtime-send-mode="queue" aria-checked="true">
+                    <strong>加入队列</strong>
+                    <span>当前任务完成后按顺序执行</span>
+                  </button>
+                  <button type="button" role="menuitemradio" data-runtime-send-mode="steer" aria-checked="false">
+                    <strong>引导发送</strong>
+                    <span>不中断当前任务,下一可中断节点生效</span>
+                  </button>
+                </div>
+              </div>
               <button class="send-button" id="composerSendButton" type="button" title="发送" aria-label="发送"><svg><use href="#icon-send"></use></svg></button>
             </div>
           </div>
@@ -334,9 +362,9 @@
       </aside>
     </div>
 
-    <script src="data.js?v=20260429-8"></script>
-    <script src="automation-data.js?v=20260429-8"></script>
-    <script src="automation-module.js?v=20260429-8"></script>
-    <script src="app.js?v=20260429-8"></script>
+    <script src="data.js?v=20260430-7"></script>
+    <script src="automation-data.js?v=20260430-7"></script>
+    <script src="automation-module.js?v=20260430-7"></script>
+    <script src="app.js?v=20260430-7"></script>
   </body>
 </html>
