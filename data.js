@@ -1,6 +1,6 @@
 const DEMO_DATA = (() => {
   const planItems = [
-    { title: "识别三份附件票据", tool: "File Read / OCR", eta: "约 20 秒" },
+    { title: "读取三份附件票据", tool: "文档解析 / 图像理解", eta: "约 20 秒" },
     { title: "核验行程、住宿与交通金额", tool: "Code Execution", eta: "约 15 秒" },
     { title: "对齐住宿晚数与可报销发票", tool: "Policy Engine", eta: "约 8 秒" },
     { title: "连接 ERP 创建报销草稿", tool: "ERP Connector", eta: "约 30 秒" },
@@ -382,7 +382,7 @@ const DEMO_DATA = (() => {
       type: "input_composer",
       schema: {
         project_id: "proj-travel-ops",
-        supports: ["attachments", "skill_mentions", "skill_picker", "stop", "queue", "steer"]
+        supports: ["attachments", "skill_mentions", "skill_picker", "stop", "queue", "parallel"]
       }
     },
     stepper: {
@@ -632,25 +632,16 @@ const DEMO_DATA = (() => {
           }
         },
         {
-          kind: "tool_call",
-          id: "tool-pending-001",
-          toolName: "file_queue",
-          category: "file",
-          status: "pending",
-          headline: "read file",
-          action: "排队读取三份附件",
-          target: "会话工作区",
-          elapsed: "0.0s",
-          summary: "即将运行",
+          kind: "narration",
+          id: "msg-narration-read-attachments",
+          text: "下面我会先调用工具读取用户上传的附件",
           annotation: {
-            label: "TOOL_CALL[pending]",
-            type: "tool_call",
-            subtype: "file",
+            label: "NARRATION",
+            type: "agent_narration",
             schema: {
-              tool_name: "file_queue",
-              args: { files: ["上海机票行程单.pdf", "酒店发票.jpg", "打车发票-03-18.png"] },
-              output: null,
-              status: "pending"
+              message_id: "msg-narration-read-attachments",
+              role: "assistant",
+              before_tools: ["tool-read-flight", "tool-ocr-hotel", "tool-ocr-taxi"]
             }
           }
         }
@@ -664,24 +655,26 @@ const DEMO_DATA = (() => {
         {
           kind: "tool_call",
           id: "tool-read-flight",
-          toolName: "file_read",
-          category: "file",
-          status: "success_collapsed",
-          headline: "Read file 上海机票行程单",
-          action: "读取",
+          toolName: "文档解析",
+          category: "doc",
+          status: "success_expanded",
+          headline: "文档解析",
+          action: "解析",
           target: "上海机票行程单.pdf",
           elapsed: "1.8s",
-          summary: "读取 上海机票行程单.pdf · 1 页 · 1.8s",
-          args: { path: "/workspace/attachments/上海机票行程单.pdf", mode: "ocr_ready" },
-          output: { passenger: "张三", route: "北京 → 上海", amount: "¥1,280", invoice_code: "144032026041" },
+          args: { file_name: "上海机票行程单.pdf", file_path: "/workspace/attachments/上海机票行程单.pdf" },
+          output: {
+            status: "200 success",
+            response: "中国东方航空电子客票行程单\n旅客姓名：张三\n航程：北京大兴 - 上海虹桥\n航班号：MU5108\n日期：2026-03-18\n票价：1280.00 元\n发票代码：144032026041"
+          },
           annotation: {
             label: "TOOL_CALL[success]",
             type: "tool_call",
-            subtype: "file",
+            subtype: "document_parse",
             schema: {
-              tool_name: "file_read",
-              args: { path: "/workspace/attachments/上海机票行程单.pdf" },
-              output: { pages: 1, extracted_fields: ["passenger", "route", "amount"] },
+              tool_name: "文档解析",
+              args: { file_name: "上海机票行程单.pdf", file_path: "/workspace/attachments/上海机票行程单.pdf" },
+              output: { status: "200 success", response_type: "plain_text" },
               latency_ms: 1842
             }
           }
@@ -690,36 +683,53 @@ const DEMO_DATA = (() => {
     },
     {
       id: 12,
-      title: "OCR 识别酒店发票",
+      title: "解析酒店发票图片",
       kind: "TOOL_CALL",
       items: [
         {
           kind: "tool_call",
+          id: "tool-ocr-hotel-running",
+          toolName: "图像理解",
+          category: "doc",
+          status: "running",
+          headline: "图像理解",
+          action: "解析",
+          target: "酒店发票.jpg",
+          args: { file_name: "酒店发票.jpg", file_path: "/workspace/attachments/酒店发票.jpg" },
+          annotation: {
+            label: "TOOL_CALL[running]",
+            type: "tool_call",
+            subtype: "image_understanding",
+            schema: {
+              tool_name: "图像理解",
+              args: { file_name: "酒店发票.jpg", file_path: "/workspace/attachments/酒店发票.jpg" },
+              output: null
+            }
+          }
+        },
+        {
+          kind: "tool_call",
           id: "tool-ocr-hotel",
-          toolName: "ocr_extract",
+          toolName: "图像理解",
           category: "doc",
           status: "success_expanded",
-          headline: "OCR extract 酒店发票.jpg",
-          action: "OCR 识别",
+          headline: "图像理解",
+          action: "解析",
           target: "酒店发票.jpg",
           elapsed: "2.4s",
-          summary: "识别 酒店发票.jpg · 11 个字段 · 2.4s",
-          args: { file: "酒店发票.jpg", schema: "vat_invoice_cn", strict: true },
+          args: { file_name: "酒店发票.jpg", file_path: "/workspace/attachments/酒店发票.jpg" },
           output: {
-            seller: "上海虹桥商务酒店有限公司",
-            buyer: "中国电信集团有限公司",
-            stay_date: "2026-03-18",
-            amount: "¥1,080",
-            tax_rate: "6%"
+            status: "200 success",
+            response: "增值税普通发票\n销售方名称：上海虹桥商务酒店有限公司\n购买方名称：中国电信集团有限公司\n住宿日期：2026-03-18 至 2026-03-19\n项目名称：住宿服务\n金额：1080.00 元\n税率：6%"
           },
           annotation: {
             label: "TOOL_CALL[success]",
             type: "tool_call",
-            subtype: "document_ocr",
+            subtype: "image_understanding",
             schema: {
-              tool_name: "ocr_extract",
-              args: { file_id: "file-hotel-001", schema: "vat_invoice_cn" },
-              output: { fields_count: 11, confidence: 0.96 },
+              tool_name: "图像理解",
+              args: { file_name: "酒店发票.jpg", file_path: "/workspace/attachments/酒店发票.jpg" },
+              output: { status: "200 success", response_type: "plain_text" },
               latency_ms: 2410
             }
           }
@@ -728,30 +738,32 @@ const DEMO_DATA = (() => {
     },
     {
       id: 13,
-      title: "OCR 识别打车发票",
+      title: "解析打车发票图片",
       kind: "TOOL_CALL",
       items: [
         {
           kind: "tool_call",
           id: "tool-ocr-taxi",
-          toolName: "ocr_extract",
+          toolName: "图像理解",
           category: "doc",
-          status: "success_collapsed",
-          headline: "OCR extract 打车发票-03-18.png",
-          action: "OCR 识别",
+          status: "success_expanded",
+          headline: "图像理解",
+          action: "解析",
           target: "打车发票-03-18.png",
           elapsed: "1.1s",
-          summary: "识别 打车发票-03-18.png · 3 张行程 · 1.1s",
-          args: { file: "打车发票-03-18.png", schema: "ride_receipt_cn" },
-          output: { rides: 3, amount: "¥187", route_match: true },
+          args: { file_name: "打车发票-03-18.png", file_path: "/workspace/attachments/打车发票-03-18.png" },
+          output: {
+            status: "200 success",
+            response: "网约车行程发票截图\n行程 1：上海虹桥站 - 上海虹桥商务酒店，金额 68.00 元\n行程 2：上海虹桥商务酒店 - 客户园区，金额 52.00 元\n行程 3：客户园区 - 上海虹桥站，金额 67.00 元\n合计金额：187.00 元"
+          },
           annotation: {
             label: "TOOL_CALL[success]",
             type: "tool_call",
-            subtype: "document_ocr",
+            subtype: "image_understanding",
             schema: {
-              tool_name: "ocr_extract",
-              args: { file_id: "file-taxi-001", schema: "ride_receipt_cn" },
-              output: { rides: 3, total_amount: 187 },
+              tool_name: "图像理解",
+              args: { file_name: "打车发票-03-18.png", file_path: "/workspace/attachments/打车发票-03-18.png" },
+              output: { status: "200 success", response_type: "plain_text" },
               latency_ms: 1130
             }
           }
@@ -766,7 +778,7 @@ const DEMO_DATA = (() => {
         {
           kind: "narration",
           id: "msg-narration-002",
-          text: "已完成差旅、机酒、交通 4 份票据查验。",
+          text: "已完成三份附件解析，后续会基于解析文本核验差旅报销信息。",
           annotation: {
             label: "NARRATION",
             type: "agent_narration",
@@ -777,33 +789,32 @@ const DEMO_DATA = (() => {
     },
     {
       id: 15,
-      title: "ERP 创建草稿运行并成功",
+      title: "创建报销草稿文件",
       kind: "TOOL_CALL",
       autoSuccess: true,
       items: [
         {
           kind: "tool_call",
           id: "tool-erp-draft-run",
-          toolName: "erp.expense.create_draft",
-          category: "connector",
-          connector: "ERP",
+          toolName: "local.file.create",
+          category: "file",
           status: "running_to_success",
-          headline: "erp.expense.create_draft",
+          headline: "创建：BX-DRAFT-7781.md",
           action: "创建",
-          target: "ERP 报销单草稿",
+          target: "BX-DRAFT-7781.md",
           elapsed: "3.2s",
-          summary: "已创建草稿 BX-DRAFT-7781",
-          args: { employee_id: "E1024", category: "差旅费", amount: 3847 },
-          output: { draft_id: "BX-DRAFT-7781", status: "draft", editable: true },
-          stream: ["连接 ERP 租户...", "写入基础字段...", "关联三份票据附件...", "草稿创建完成。"],
+          summary: "创建 BX-DRAFT-7781.md",
+          args: { path: "/ClawAgent/差旅报销/BX20260423001/BX-DRAFT-7781.md", source: "ERP 报销草稿" },
+          output: { file_name: "BX-DRAFT-7781.md", path: "/ClawAgent/差旅报销/BX20260423001/BX-DRAFT-7781.md", draft_id: "BX-DRAFT-7781" },
+          stream: ["整理 ERP 草稿字段...", "写入费用明细与附件索引...", "生成草稿文件 BX-DRAFT-7781.md..."],
           annotation: {
             label: "TOOL_CALL[running]",
             type: "tool_call",
-            subtype: "mcp_connector",
+            subtype: "local_file_system",
             schema: {
-              tool_name: "erp.expense.create_draft",
+              tool_name: "local.file.create",
               status_flow: ["running", "success"],
-              output: { draft_id: "BX-DRAFT-7781" },
+              output: { file_name: "BX-DRAFT-7781.md", draft_id: "BX-DRAFT-7781" },
               latency_ms: 3200
             }
           }
@@ -854,6 +865,20 @@ const DEMO_DATA = (() => {
       hitl: "permission",
       items: [
         {
+          kind: "narration",
+          id: "msg-narration-before-erp-write",
+          text: "下一步我会先填写差旅报销表单草稿，并让用户确认提交至ERP系统",
+          annotation: {
+            label: "NARRATION",
+            type: "agent_narration",
+            schema: {
+              message_id: "msg-narration-before-erp-write",
+              role: "assistant",
+              before_tool: "erp.expense.write"
+            }
+          }
+        },
+        {
           kind: "tool_call",
           id: "tool-erp-write-approval",
           toolName: "erp.expense.write",
@@ -864,12 +889,29 @@ const DEMO_DATA = (() => {
           action: "连接器 ERP",
           target: "写入报销单草稿",
           elapsed: "等待授权",
-          summary: "将把已核验的费用明细写入 ERP 草稿,不会提交 OA 审批。",
+          successSummary: "写入成功 · code 200 · BX-DRAFT-7781",
+          deniedSummary: "用户拒绝授权 · code 403 · 未写入 ERP 草稿",
+          advanceTo: 21,
           args: {
             draft_id: "BX-DRAFT-7781",
             lines: 6,
             attachments: 3,
             include_policy_fields: true
+          },
+          output: {
+            code: 200,
+            message: "ERP 草稿写入成功",
+            draft_id: "BX-DRAFT-7781",
+            amount: "¥3,847",
+            lines: 6,
+            attachments: 3,
+            validation: "passed"
+          },
+          deniedOutput: {
+            code: 403,
+            message: "用户拒绝授权,ERP 写入请求未执行。",
+            draft_id: "BX-DRAFT-7781",
+            status: "denied"
           },
           feedbackMessages: {
             "deny-permission": "已拒绝 ERP 写入授权,当前流程停留在草稿阶段。"
@@ -882,7 +924,7 @@ const DEMO_DATA = (() => {
               tool_name: "erp.expense.write",
               connector: "ERP",
               args: { draft_id: "BX-DRAFT-7781", lines: 6, attachments: 3 },
-              output: null
+              output: { code: 200, draft_id: "BX-DRAFT-7781" }
             },
             hitl_policy: "allow_once_or_always"
           }
@@ -1087,7 +1129,7 @@ const DEMO_DATA = (() => {
     },
     {
       id: 24,
-      title: "正在创建申请文档",
+      title: "创建申请文档",
       kind: "TOOL_CALL",
       items: [
         {
@@ -1097,7 +1139,7 @@ const DEMO_DATA = (() => {
           category: "doc",
           presentation: "local_file_create",
           status: "running",
-          headline: "正在创建：差旅申请草稿.docx",
+          headline: "创建：差旅申请草稿.docx",
           action: "创建",
           target: "差旅申请草稿.docx",
           elapsed: "00:06",
@@ -1119,7 +1161,7 @@ const DEMO_DATA = (() => {
     },
     {
       id: 25,
-      title: "申请文档生成完成",
+      title: "申请文档生成",
       kind: "TOOL_CALL",
       items: [
         {
@@ -1129,11 +1171,11 @@ const DEMO_DATA = (() => {
           category: "doc",
           presentation: "local_file_create",
           status: "success_collapsed",
-          headline: "已完成：差旅申请草稿.docx",
-          action: "完成",
+          headline: "创建：差旅申请草稿.docx",
+          action: "创建",
           target: "差旅申请草稿.docx",
           elapsed: "6.4s",
-          summary: "已完成 差旅申请草稿.docx · 126 KB · 6.4s",
+          summary: "创建 差旅申请草稿.docx · 126 KB · 6.4s",
           output: {
             file_name: "差旅申请草稿.docx",
             path: draftDocumentArtifact.path,
@@ -1155,17 +1197,26 @@ const DEMO_DATA = (() => {
     },
     {
       id: 26,
-      title: "引导查看任务产物",
-      kind: "NARRATION",
+      title: "上下文压缩",
+      kind: "CONTEXT_COMPRESSION",
+      autoSuccess: true,
+      blockAdvanceUntilComplete: true,
       items: [
         {
-          kind: "narration",
-          id: "msg-narration-005",
-          text: "下面是本次任务产物。",
+          kind: "context_compression",
+          id: "context-compression-001",
+          title: "上下文正在压缩",
+          summary: "正在整理已完成的票据识别、ERP 草稿、审批状态与文件产物上下文。",
+          completedTitle: "上下文压缩完成",
+          completedSummary: "已保留关键决策、工具结果与待交付产物信息,后续步骤将基于压缩后的上下文继续执行。",
           annotation: {
-            label: "NARRATION",
-            type: "agent_narration",
-            schema: { message_id: "msg-narration-005", role: "assistant", display: "inline_text" }
+            label: "CONTEXT_COMPRESSION",
+            type: "context_compression",
+            schema: {
+              strategy: "summarize_completed_context",
+              block_next_step_until_done: true,
+              retained: ["票据字段", "ERP 草稿", "OA 审批状态", "交付产物"]
+            }
           }
         }
       ]
@@ -1222,14 +1273,14 @@ const DEMO_DATA = (() => {
         {
           kind: "tool_call",
           id: "tool-local-delete-destructive",
-          toolName: "local.file.delete",
-          category: "file",
+          toolName: "shell.exec",
+          category: "shell",
           status: "destructive",
-          headline: "local.file.delete",
-          action: "即将删除本地文件",
-          target: "删除后不可恢复",
+          headline: `rm "${draftDocumentArtifact.path}"`,
+          action: "运行",
+          target: `rm "${draftDocumentArtifact.path}"`,
           elapsed: "等待确认",
-          summary: "将删除当前任务目录中的本地草稿文件,删除后将无法直接恢复。",
+          summary: `rm "${draftDocumentArtifact.path}"`,
           impact: [
             "将删除差旅申请草稿.docx",
             "将从当前任务产物中移除该文件",
@@ -1239,17 +1290,21 @@ const DEMO_DATA = (() => {
           confirmLabel: "确认删除",
           cancelLabel: "保留文件",
           showEdit: false,
-          confirmAdvanceSteps: 3,
+          confirmAdvanceSteps: 1,
+          args: {
+            command: `rm "${draftDocumentArtifact.path}"`,
+            cwd: "/ClawAgent/差旅报销/BX20260423001"
+          },
           feedbackMessages: {
             "cancel-destructive": "已取消删除,本地草稿文件会继续保留。"
           },
           annotation: {
             label: "HITL[destructive]",
             type: "tool_call",
-            subtype: "local_file_system",
+            subtype: "shell",
             schema: {
-              tool_name: "local.file.delete",
-              args: { path: draftDocumentArtifact.path, recursive: false },
+              tool_name: "shell.exec",
+              args: { command: `rm "${draftDocumentArtifact.path}"`, cwd: "/ClawAgent/差旅报销/BX20260423001" },
               output: null,
               impact_count: 3
             },
@@ -1260,7 +1315,7 @@ const DEMO_DATA = (() => {
     },
     {
       id: 30,
-      title: "本地文件删除完成",
+      title: "本地文件删除",
       kind: "TOOL_CALL",
       items: [
         {
@@ -1270,11 +1325,11 @@ const DEMO_DATA = (() => {
           category: "file",
           presentation: "local_file_delete",
           status: "success_collapsed",
-          headline: "已删除：差旅申请草稿.docx",
+          headline: "删除：差旅申请草稿.docx",
           action: "删除",
           target: "差旅申请草稿.docx",
           elapsed: "0.4s",
-          summary: "删除成功 · 差旅申请草稿.docx · 0.4s",
+          summary: "删除 差旅申请草稿.docx · 0.4s",
           output: {
             file_name: "差旅申请草稿.docx",
             path: draftDocumentArtifact.path,
@@ -1331,6 +1386,416 @@ const DEMO_DATA = (() => {
           }
         }
       ]
+    },
+    {
+      id: 33,
+      title: "最终审计与归档检查",
+      kind: "TOOL_CALL",
+      items: [
+        {
+          kind: "tool_call",
+          id: "tool-browser-approval-check",
+          toolName: "browser.inspect",
+          category: "web",
+          status: "success_expanded",
+          headline: "browser.inspect OA 审批页",
+          action: "检查",
+          target: "OA 审批详情页",
+          elapsed: "1.2s",
+          summary: "已打开 OA 审批详情页,确认审批单状态与附件数量。",
+          args: { url: "https://oa.example.com/approval/BX20260423001", wait_until: "networkidle" },
+          output: {
+            title: "OA 审批详情 - BX20260423001",
+            url: "https://oa.example.com/approval/BX20260423001",
+            findings: ["审批单状态: 已提交", "当前处理人: 李经理", "附件数量: 2", "SLA: 2 个工作日"]
+          },
+          annotation: {
+            label: "TOOL_CALL[browser]",
+            type: "tool_call",
+            subtype: "browser",
+            schema: {
+              tool_name: "browser.inspect",
+              args: { url: "https://oa.example.com/approval/BX20260423001" },
+              output: { status: "submitted", assignee: "李经理" },
+              latency_ms: 1210
+            }
+          }
+        },
+        {
+          kind: "tool_call",
+          id: "tool-shell-artifact-list",
+          toolName: "shell.exec",
+          category: "shell",
+          status: "success_expanded",
+          headline: "shell.exec ls artifacts",
+          action: "列出",
+          target: "归档目录",
+          elapsed: "0.3s",
+          summary: "已检查归档目录,确认本地草稿已删除且正式交付件仍保留。",
+          args: {
+            command: "ls -lh /ClawAgent/差旅报销/BX20260423001",
+            cwd: "/ClawAgent/差旅报销/BX20260423001"
+          },
+          output: {
+            exit_code: 0,
+            stdout: "-rw-r--r--  报销申请表.pdf 428K\n-rw-r--r--  附件清单.xlsx 84K",
+            stderr: ""
+          },
+          annotation: {
+            label: "TOOL_CALL[shell]",
+            type: "tool_call",
+            subtype: "shell",
+            schema: {
+              tool_name: "shell.exec",
+              args: { command: "ls -lh", cwd: "/ClawAgent/差旅报销/BX20260423001" },
+              output: { exit_code: 0, files: 2 },
+              latency_ms: 320
+            }
+          }
+        },
+        {
+          kind: "tool_call",
+          id: "tool-code-reconcile",
+          toolName: "code.execute",
+          category: "code",
+          status: "success_expanded",
+          headline: "code.execute reimbursement reconciliation",
+          action: "复核",
+          target: "金额与附件一致性",
+          elapsed: "0.9s",
+          summary: "已用代码复核金额、附件数量与删除后的产物清单。",
+          args: {
+            language: "JavaScript",
+            code: "const total = 1280 + 1080 + 187 + 1300;\nassert(total === 3847);\nassert(artifacts.length === 2);"
+          },
+          output: {
+            result: "通过",
+            total_amount: "¥3,847",
+            diff: "¥0",
+            checks: ["费用合计与 ERP 草稿一致", "OA 审批附件数量为 2", "本地草稿已从产物列表移除"]
+          },
+          annotation: {
+            label: "TOOL_CALL[code]",
+            type: "tool_call",
+            subtype: "code_execution",
+            schema: {
+              tool_name: "code.execute",
+              args: { language: "JavaScript" },
+              output: { result: "passed", checks: 3 },
+              latency_ms: 930
+            }
+          }
+        },
+        {
+          kind: "tool_call",
+          id: "tool-subagent-audit",
+          toolName: "agent.delegate",
+          category: "subagent",
+          status: "success_expanded",
+          headline: "agent.delegate AuditTrail",
+          action: "委派",
+          target: "审计子代理",
+          elapsed: "3.6s",
+          summary: "审计子代理已完成审批、附件与归档一致性复核。",
+          args: { agent: "AuditTrail", scope: "expense-session-final-check" },
+          output: {
+            agent: "AuditTrail",
+            status: "完成",
+            summary: "最终归档状态一致,无遗留本地草稿。",
+            tasks: [
+              { title: "审批状态复核", detail: "OA 单据 BX20260423001 已提交", status: "done" },
+              { title: "附件清单复核", detail: "正式交付件 2 个,草稿文件已移除", status: "done" },
+              { title: "审计备注生成", detail: "已写入会话总结", status: "done" }
+            ]
+          },
+          annotation: {
+            label: "TOOL_CALL[subagent]",
+            type: "tool_call",
+            subtype: "subagent",
+            schema: {
+              tool_name: "agent.delegate",
+              args: { agent: "AuditTrail" },
+              output: { status: "done", tasks: 3 },
+              latency_ms: 3600
+            }
+          }
+        }
+      ]
+    },
+    {
+      id: 34,
+      title: "全流程完成",
+      kind: "NARRATION",
+      items: [
+        {
+          kind: "narration",
+          id: "msg-narration-007",
+          text: "差旅报销流程已完成：审批已提交、正式文件已保留、本地草稿已删除，最终审计检查也已通过。",
+          annotation: {
+            label: "NARRATION",
+            type: "agent_narration",
+            schema: { message_id: "msg-narration-007", role: "assistant", derived_from_tools: ["tool-subagent-audit"] }
+          }
+        }
+      ]
+    }
+  ];
+
+  /** 对齐 nexus-platform `MARKETPLACE_SKILL_SEEDS` / skills hub 广场列表（仅展示字段） */
+  const skillPlazaSourceFilters = [
+    { value: "all", label: "全部" },
+    { value: "platform", label: "平台精选" },
+    { value: "org", label: "我的组织" },
+    { value: "favorite", label: "我收藏的" }
+  ];
+
+  const skillPlazaCategoryFilters = [
+    { value: "all", label: "全部类型" },
+    { value: "ai", label: "通用" },
+    { value: "dev", label: "开发工具" },
+    { value: "data", label: "数据分析" },
+    { value: "communication", label: "通讯协作" },
+    { value: "content", label: "企业服务" },
+    { value: "efficiency", label: "效率工具" },
+    { value: "security", label: "安全合规" }
+  ];
+
+  const skillPlazaSkills = [
+    {
+      id: "af-rag",
+      name: "制度流程查询",
+      author: "平台办公中心",
+      publishedAt: "03-26 16:28",
+      publishedBy: "楠不难",
+      description:
+        "用于结合制度库、流程手册和审批规范，快速回答请示、采购、报销等常见流程问题，并提示所需材料与注意事项。",
+      category: "通用",
+      sourceType: "platform",
+      audienceCategory: "ai",
+      isFavorite: true,
+      tags: ["制度", "流程", "审批"],
+      declaredDependencies: [{ name: "制度中心 MCP" }],
+      downloads: 4598
+    },
+    {
+      id: "af-ask-data",
+      name: "经营问数",
+      author: "平台经营中心",
+      publishedAt: "03-25 14:18",
+      publishedBy: "周可",
+      description:
+        "用于围绕经营指标、项目数据和预算执行情况直接提问，快速形成口径说明、异常原因和汇报结论。",
+      category: "通用",
+      sourceType: "platform",
+      audienceCategory: "ai",
+      isFavorite: true,
+      tags: ["经营分析", "指标", "预算"],
+      downloads: 4213
+    },
+    {
+      id: "cestc-mail",
+      name: "正式邮件撰写",
+      author: "综合办公室-李晓晓",
+      publishedAt: "03-24 11:06",
+      publishedBy: "李晓晓",
+      description:
+        "用于起草对内对外正式邮件，自动补齐事项背景、需要配合的动作和反馈时限，适合催办、汇报和请示场景。",
+      category: "通用",
+      sourceType: "org",
+      audienceCategory: "ai",
+      isFavorite: true,
+      tags: ["邮件", "催办", "汇报"],
+      declaredDependencies: [{ name: "办公套件插件" }, { name: "邮件网关 MCP" }],
+      downloads: 2984
+    },
+    {
+      id: "lanxin-communication",
+      name: "蓝信通知编写",
+      author: "办公协同中心-王晨",
+      publishedAt: "03-24 17:42",
+      publishedBy: "王晨",
+      description: "用于把会议安排、任务提醒和值班通知整理成适合蓝信发送的短消息，减少群内来回确认。",
+      category: "通用",
+      sourceType: "org",
+      audienceCategory: "ai",
+      isFavorite: false,
+      tags: ["蓝信", "通知", "通讯协同"],
+      downloads: 2147
+    },
+    {
+      id: "travel-expense-reimbursement",
+      name: "差旅报销",
+      author: "平台办公服务中心",
+      publishedAt: "03-26 16:28",
+      publishedBy: "顾宁",
+      description:
+        "用于处理员工差旅报销申请，完成材料检查、验票校验、自动填单与审批发起。",
+      category: "通用",
+      sourceType: "platform",
+      audienceCategory: "ai",
+      isFavorite: false,
+      tags: ["办公", "差旅", "报销", "审批", "验票", "填单"],
+      declaredDependencies: [{ name: "验票工作流" }, { name: "自动填单工作流" }],
+      downloads: 3256
+    },
+    {
+      id: "xlsx",
+      name: "生产日报汇总",
+      author: "制造运营中心",
+      publishedAt: "03-22 18:16",
+      publishedBy: "许航",
+      description:
+        "用于汇总各班组产量、停机、质量和交付数据，自动形成生产日报并标出异常波动，适合制造和工业现场使用。",
+      category: "数据分析",
+      sourceType: "platform",
+      audienceCategory: "data",
+      isFavorite: true,
+      tags: ["生产", "制造", "日报"],
+      declaredDependencies: [{ name: "办公套件插件" }],
+      downloads: 3076
+    },
+    {
+      id: "frontend-design",
+      name: "业务系统需求说明",
+      author: "数字化建设部",
+      publishedAt: "03-22 10:24",
+      publishedBy: "林越",
+      description:
+        "用于把调研纪要、审批流程和表单字段整理成业务系统需求说明，便于立项、评审和上线准备。",
+      category: "开发工具",
+      sourceType: "platform",
+      audienceCategory: "dev",
+      isFavorite: false,
+      tags: ["需求", "项目管理", "系统建设"],
+      downloads: 2107
+    },
+    {
+      id: "doc-coauthoring",
+      name: "会议纪要整理",
+      author: "综合办公室-周媛",
+      publishedAt: "03-21 15:08",
+      publishedBy: "周媛",
+      description:
+        "用于根据会议录音、讨论记录和待办事项快速形成正式纪要，明确责任人、时间节点和后续动作。",
+      category: "通讯协作",
+      sourceType: "org",
+      audienceCategory: "communication",
+      isFavorite: true,
+      tags: ["纪要", "会议", "待办"],
+      downloads: 3382
+    },
+    {
+      id: "brand-guidelines",
+      name: "合同条款审阅",
+      author: "法务合规部-陈昱",
+      publishedAt: "03-21 09:42",
+      publishedBy: "陈昱",
+      description:
+        "用于梳理合同关键条款、识别履约与付款风险，并生成审阅意见和审批说明，适合采购、服务和合作协议场景。",
+      category: "企业服务",
+      sourceType: "org",
+      audienceCategory: "content",
+      isFavorite: false,
+      tags: ["合同", "法务", "合规"],
+      declaredDependencies: [{ name: "合同审阅 MCP" }],
+      downloads: 1934
+    },
+    {
+      id: "webapp-testing",
+      name: "投标材料检查",
+      author: "招采管理部-何静",
+      publishedAt: "03-20 11:12",
+      publishedBy: "何静",
+      description:
+        "用于核对投标文件是否齐套，检查资质、授权、盖章和报价说明，减少递交前遗漏和返工。",
+      category: "安全合规",
+      sourceType: "org",
+      audienceCategory: "security",
+      isFavorite: false,
+      tags: ["招采", "投标", "合规"],
+      declaredDependencies: [{ name: "招采协同插件" }],
+      downloads: 1862
+    },
+    {
+      id: "workflow-copilot",
+      name: "公文写作",
+      author: "公文规范组",
+      publishedAt: "03-19 14:26",
+      publishedBy: "宋远",
+      description:
+        "用于根据事项背景、请示内容和报送对象生成正式公文，适合通知、请示、报告和情况说明等场景。",
+      category: "通用",
+      sourceType: "platform",
+      audienceCategory: "ai",
+      isFavorite: true,
+      tags: ["公文", "请示", "报告"],
+      declaredDependencies: [{ name: "制度中心 MCP" }, { name: "办公套件插件" }],
+      downloads: 4826
+    },
+    {
+      id: "public-opinion",
+      name: "企业舆情整理",
+      author: "投资研究中心",
+      publishedAt: "03-18 13:52",
+      publishedBy: "韩松",
+      description:
+        "用于汇总新闻、公告和公开资料，形成企业舆情摘要、风险提示和尽调备忘，适合投资研判和合作前评估。",
+      category: "数据分析",
+      sourceType: "platform",
+      audienceCategory: "data",
+      isFavorite: false,
+      tags: ["舆情", "金融", "风控"],
+      declaredDependencies: [{ name: "舆情监测插件" }],
+      downloads: 2286
+    }
+  ];
+
+  /** 「我的技能」列表（与产品截图一致：来源内置/我的 + 启停 + 删除） */
+  const skillMineItems = [
+    {
+      id: "mine-doc-writing",
+      name: "公文写作",
+      description: "根据事项背景与报送对象生成通知、请示、报告等正式公文初稿。",
+      origin: "builtin",
+      updatedAt: "2026-04-09 10:30",
+      defaultEnabled: true,
+      icon: "edit"
+    },
+    {
+      id: "mine-travel-reimb",
+      name: "差旅报销",
+      description: "整理差旅票据与说明，预校验材料并衔接报销填单与审批流程。",
+      origin: "builtin",
+      updatedAt: "2026-04-08 16:20",
+      defaultEnabled: true,
+      icon: "plane"
+    },
+    {
+      id: "mine-send-msg-agent",
+      name: "send_message_to_agent",
+      description: "向指定智能体发送结构化消息并接收异步处理结果。",
+      origin: "builtin",
+      updatedAt: "2026-04-07 09:45",
+      defaultEnabled: true,
+      icon: "code"
+    },
+    {
+      id: "mine-user-custom-rag",
+      name: "制度流程查询",
+      description: "基于本租户知识库回答制度与流程类问题（我的技能·已发布）。",
+      origin: "mine",
+      updatedAt: "2026-03-26 16:28",
+      defaultEnabled: true,
+      icon: "doc"
+    },
+    {
+      id: "mine-user-xlsx",
+      name: "生产日报汇总",
+      description: "汇总班组产量与异常，生成生产日报（我的技能·草稿）。",
+      origin: "mine",
+      updatedAt: "2026-03-22 18:16",
+      defaultEnabled: false,
+      icon: "chart"
     }
   ];
 
@@ -1345,7 +1810,11 @@ const DEMO_DATA = (() => {
     enterpriseAgentCategoryTabs,
     enterpriseAgents,
     enterpriseFlowPresets,
-    staticAnnotations
+    staticAnnotations,
+    skillPlazaSourceFilters,
+    skillPlazaCategoryFilters,
+    skillPlazaSkills,
+    skillMineItems
   };
 })();
 

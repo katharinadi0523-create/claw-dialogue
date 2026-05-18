@@ -7,10 +7,18 @@
     recentTasks,
     enterpriseAgentCategoryTabs: rawEnterpriseAgentCategoryTabs,
     enterpriseAgents: rawEnterpriseAgents,
-    enterpriseFlowPresets: rawEnterpriseFlowPresets
+    enterpriseFlowPresets: rawEnterpriseFlowPresets,
+    skillPlazaSourceFilters: rawSkillPlazaSourceFilters,
+    skillPlazaCategoryFilters: rawSkillPlazaCategoryFilters,
+    skillPlazaSkills: rawSkillPlazaSkills,
+    skillMineItems: rawSkillMineItems
   } = window.DEMO_DATA;
   const enterpriseAgentCategoryTabs = Array.isArray(rawEnterpriseAgentCategoryTabs) ? rawEnterpriseAgentCategoryTabs : [];
   const enterpriseAgents = Array.isArray(rawEnterpriseAgents) ? rawEnterpriseAgents : [];
+  const skillPlazaSourceFilters = Array.isArray(rawSkillPlazaSourceFilters) ? rawSkillPlazaSourceFilters : [];
+  const skillPlazaCategoryFilters = Array.isArray(rawSkillPlazaCategoryFilters) ? rawSkillPlazaCategoryFilters : [];
+  const skillPlazaSkills = Array.isArray(rawSkillPlazaSkills) ? rawSkillPlazaSkills : [];
+  const skillMineItems = Array.isArray(rawSkillMineItems) ? rawSkillMineItems : [];
   const enterpriseFlowPresets =
     rawEnterpriseFlowPresets && typeof rawEnterpriseFlowPresets === "object"
       ? rawEnterpriseFlowPresets
@@ -31,10 +39,6 @@
   const CLARIFY_EXIT_DELAY_MS = 220;
   const ENTERPRISE_RUN_INTERVAL_MS = 900;
   const DEFAULT_RECENTS_VISIBLE = 4;
-  const DEFAULT_HEADER = {
-    title: "上海出差报销申请",
-    subtitle: "会话 ID: sess-expense-20260423 · 项目: 企业差旅运营"
-  };
   const SHELL_SIDEBAR_WIDTH = 240;
   const SHELL_RESIZER_WIDTH = 10;
   const DEFAULT_RIGHT_PANEL_WIDTH = 408;
@@ -114,6 +118,31 @@
     },
     previewDrafts: {
       "bx-draft-7781-md": DEFAULT_MARKDOWN_DRAFT
+    },
+    skillPlaza: {
+      query: "",
+      source: "all",
+      category: "all",
+      sort: "downloads"
+    },
+    skillPlazaFavoriteOverrides: {},
+    skillHubTab: "plaza",
+    skillMine: {
+      query: "",
+      source: "all",
+      page: 1,
+      pageSize: 10,
+      jumpInput: "",
+      enabledOverrides: {},
+      deletedIds: {},
+      importedFromPlaza: []
+    },
+    productDocs: {
+      tab: "request",
+      flows: {
+        request: { phase: "pending", outcome: "success" },
+        code: { phase: "pending", outcome: "success" }
+      }
     }
   };
 
@@ -128,8 +157,6 @@
     appShell: document.getElementById("appShell"),
     stream: document.getElementById("messageStream"),
     noticeStack: document.getElementById("noticeStack"),
-    sessionTitle: document.getElementById("sessionTitle"),
-    sessionSubtitle: document.getElementById("sessionSubtitle"),
     navList: document.getElementById("navList"),
     recentTaskList: document.getElementById("recentTaskList"),
     composerProgressDock: document.getElementById("composerProgressDock"),
@@ -160,6 +187,8 @@
     rightPanel: document.getElementById("rightPanel"),
     rightPanelTabs: document.getElementById("rightPanelTabs"),
     overviewSection: document.getElementById("overviewSection"),
+    enterpriseOverviewIdle: document.getElementById("enterpriseOverviewIdle"),
+    enterpriseOverviewPanels: document.getElementById("enterpriseOverviewPanels"),
     previewSection: document.getElementById("previewSection"),
     previewPaneHead: document.getElementById("previewPaneHead"),
     previewToolbar: document.getElementById("previewToolbar"),
@@ -196,6 +225,93 @@
     query: "",
     buttonMode: false,
     active: 0
+  };
+
+  const PRODUCT_DOC_TABS = [
+    { id: "request", label: "请求响应类", icon: "globe" },
+    { id: "code", label: "代码执行类", icon: "terminal" }
+  ];
+
+  const PRODUCT_DOC_STAGES = [
+    { id: "pending", label: "等待执行", code: "pending", tone: "pending" },
+    { id: "approval_required", label: "等待用户授权", code: "approval_required", tone: "approval" },
+    { id: "denied", label: "已拒绝", code: "denied", tone: "denied" },
+    { id: "running", label: "执行中", code: "running", tone: "running" },
+    { id: "success", label: "完成", code: "success", tone: "success" },
+    { id: "failed", label: "失败", code: "failed", tone: "failed" }
+  ];
+
+  const PRODUCT_DOC_DEMOS = {
+    request: {
+      title: "提交差旅申请（MCP）",
+      pendingTitle: "提交差旅申请（MCP）",
+      runningTitle: "正在提交差旅申请（MCP）",
+      approvalCopy: "Agent 将代表你向差旅系统提交申请，请确认本次差旅申请记录。",
+      approvalSubcopy: "",
+      runningCopy: "",
+      deniedCopy: "",
+      successCopy: "",
+      failedCopy: "",
+      requestLine: "POST /api/travel/applications",
+      request: {
+        title: "北京出差申请",
+        employee_id: "E12345",
+        department: "市场部",
+        destination: "北京",
+        start_date: "2026-05-20",
+        end_date: "2026-05-22",
+        purpose: "参与市场活动及洽谈",
+        estimated_cost: 3200,
+        attachments: [{ type: "file", name: "会议邀请函.pdf" }]
+      },
+      successResponse: {
+        code: 0,
+        message: "success",
+        data: {
+          application_id: "TRV20260518101622",
+          status: "Submitted",
+          submit_time: "2026-05-18T10:16:22"
+        }
+      },
+      errorResponse: {
+        code: 4000,
+        message: "日期不合法，无法提交申请",
+        detail: "出发日期晚于返程日期，预计费用 3200 元"
+      },
+      failureDetailLabel: "服务端返回"
+    },
+    code: {
+      title: "执行高敏命令",
+      pendingTitle: "执行高敏命令",
+      runningTitle: "执行高敏命令",
+      waitingCopy: "Agent 已生成命令，正在排队等待执行。",
+      approvalCopy: "Agent 请求在生产预算系统批量调增市场部差旅预算上限，该命令会写入生产数据库并影响后续审批额度，请确认。",
+      approvalSubcopy: "",
+      runningCopy: "正在执行生产预算批量写入命令，请稍候...",
+      deniedCopy: "",
+      successCopy: "命令已执行完成，生产预算策略已更新。",
+      failedCopy: "命令执行失败，已停止写入并保留错误输出。",
+      commandType: "shell",
+      command: "python3 ops/budget_admin.py apply-adjustment --env prod --department 市场部 --percent 20 --commit",
+      runningOutput: [
+        "Connecting to prod-budget-db.internal ...",
+        "Matched 18 travel budget policies",
+        "Writing adjustment percent=20 to department=市场部 ...",
+        "Audit log stream opened: AUD-20260518-101622"
+      ].join("\n"),
+      successOutput: [
+        "Updated 18 travel budget policies",
+        "Audit id: AUD-20260518-101622",
+        "Affected approval rules: 6",
+        "Exit code: 0"
+      ].join("\n"),
+      errorOutput: [
+        "ERROR: production budget table is locked",
+        "Rollback complete; no partial update remains",
+        "Exit code: 1"
+      ].join("\n"),
+      failureDetailLabel: "执行输出"
+    }
   };
 
   function getSkillById(id) {
@@ -267,6 +383,144 @@
         return;
       }
 
+      const hubTab = event.target.closest("[data-skill-hub-tab]");
+      if (hubTab) {
+        event.preventDefault();
+        state.skillHubTab = hubTab.getAttribute("data-skill-hub-tab") === "mine" ? "mine" : "plaza";
+        render();
+        return;
+      }
+
+      const productDocTab = event.target.closest("[data-product-doc-tab]");
+      if (productDocTab) {
+        event.preventDefault();
+        const tab = productDocTab.getAttribute("data-product-doc-tab") === "code" ? "code" : "request";
+        state.productDocs.tab = tab;
+        render();
+        return;
+      }
+
+      const productDocAction = event.target.closest("[data-product-doc-action]");
+      if (productDocAction) {
+        event.preventDefault();
+        handleProductDocAction(productDocAction.getAttribute("data-product-doc-action"));
+        return;
+      }
+
+      const productDocPhase = event.target.closest("[data-product-doc-phase]");
+      if (productDocPhase) {
+        event.preventDefault();
+        jumpProductDocPhase(productDocPhase.getAttribute("data-product-doc-phase"));
+        return;
+      }
+
+      const productDocOutcome = event.target.closest("[data-product-doc-outcome]");
+      if (productDocOutcome) {
+        event.preventDefault();
+        handleProductDocOutcome(productDocOutcome.getAttribute("data-product-doc-outcome"));
+        return;
+      }
+
+      const mineRefresh = event.target.closest("[data-skill-mine-refresh]");
+      if (mineRefresh) {
+        showSkillPlazaToast("技能列表已刷新。");
+        return;
+      }
+
+      const mineImport = event.target.closest("[data-skill-mine-import]");
+      if (mineImport) {
+        showSkillPlazaToast("导入技能入口即将接入。");
+        return;
+      }
+
+      const minePrev = event.target.closest("[data-skill-mine-prev]");
+      if (minePrev) {
+        if (minePrev.hasAttribute("disabled")) return;
+        event.preventDefault();
+        state.skillMine.page = Math.max(1, state.skillMine.page - 1);
+        render();
+        return;
+      }
+
+      const mineNext = event.target.closest("[data-skill-mine-next]");
+      if (mineNext) {
+        if (mineNext.hasAttribute("disabled")) return;
+        event.preventDefault();
+        const filtered = filterSkillMineList();
+        const totalPages = Math.max(1, Math.ceil(filtered.length / state.skillMine.pageSize));
+        state.skillMine.page = Math.min(totalPages, state.skillMine.page + 1);
+        render();
+        return;
+      }
+
+      const minePageBtn = event.target.closest("[data-skill-mine-page]");
+      if (minePageBtn) {
+        event.preventDefault();
+        const p = Number(minePageBtn.getAttribute("data-skill-mine-page"));
+        if (!Number.isFinite(p)) return;
+        state.skillMine.page = p;
+        render();
+        return;
+      }
+
+      const minePageSizeBtn = event.target.closest("[data-skill-mine-page-size]");
+      if (minePageSizeBtn) {
+        event.preventDefault();
+        const n = Number(minePageSizeBtn.getAttribute("data-skill-mine-page-size"));
+        if (![10, 20, 50].includes(n)) return;
+        state.skillMine.pageSize = n;
+        const filtered = filterSkillMineList();
+        const totalPages = Math.max(1, Math.ceil(filtered.length / state.skillMine.pageSize));
+        state.skillMine.page = Math.min(state.skillMine.page, totalPages);
+        render();
+        return;
+      }
+
+      const mineJumpApply = event.target.closest("[data-skill-mine-jump-apply]");
+      if (mineJumpApply) {
+        event.preventDefault();
+        applySkillMineJump();
+        return;
+      }
+
+      const mineOrigin = event.target.closest("[data-skill-mine-origin]");
+      if (mineOrigin) {
+        event.preventDefault();
+        const v = mineOrigin.getAttribute("data-skill-mine-origin") || "all";
+        state.skillMine.source = v === "builtin" ? "builtin" : v === "mine" ? "mine" : "all";
+        state.skillMine.page = 1;
+        render();
+        return;
+      }
+
+      const mineToggle = event.target.closest("[data-skill-mine-toggle]");
+      if (mineToggle) {
+        event.preventDefault();
+        const id = mineToggle.getAttribute("data-skill-mine-toggle") || "";
+        const item = findSkillMineItemById(id);
+        if (!item) return;
+        const cur = isSkillMineEnabled(item);
+        state.skillMine.enabledOverrides[id] = !cur;
+        const def = item.defaultEnabled !== false;
+        if (state.skillMine.enabledOverrides[id] === def) delete state.skillMine.enabledOverrides[id];
+        render();
+        return;
+      }
+
+      const mineDelete = event.target.closest("[data-skill-mine-delete]");
+      if (mineDelete) {
+        event.preventDefault();
+        const id = mineDelete.getAttribute("data-skill-mine-delete") || "";
+        const item = findSkillMineItemById(id);
+        if (!id) return;
+        if (item && item.origin === "builtin") return;
+        state.skillMine.deletedIds[id] = true;
+        showSkillPlazaToast(item ? `已删除「${item.name}」` : "已删除");
+        state.skillMine.page = 1;
+        render();
+        return;
+      }
+
       const enterpriseTab = event.target.closest("[data-agent-tab]");
       if (enterpriseTab) {
         event.preventDefault();
@@ -289,6 +543,73 @@
         nodes.composerTextarea.value = prompt;
         nodes.composerTextarea.focus();
         syncEnterpriseDraftQueryFromComposer();
+        return;
+      }
+
+      const plazaSrc = event.target.closest("[data-skill-plaza-source]");
+      if (plazaSrc) {
+        event.preventDefault();
+        state.skillPlaza.source = plazaSrc.getAttribute("data-skill-plaza-source") || "all";
+        render();
+        return;
+      }
+
+      const plazaCat = event.target.closest("[data-skill-plaza-category]");
+      if (plazaCat) {
+        event.preventDefault();
+        state.skillPlaza.category = plazaCat.getAttribute("data-skill-plaza-category") || "all";
+        render();
+        return;
+      }
+
+      const plazaSort = event.target.closest("[data-skill-plaza-sort]");
+      if (plazaSort) {
+        event.preventDefault();
+        const mode = plazaSort.getAttribute("data-skill-plaza-sort");
+        state.skillPlaza.sort = mode === "updatedAt" ? "updatedAt" : "downloads";
+        render();
+        return;
+      }
+
+      const plazaFav = event.target.closest("[data-skill-plaza-fav]");
+      if (plazaFav) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleSkillPlazaFavorite(plazaFav.getAttribute("data-skill-plaza-fav") || "");
+        render();
+        return;
+      }
+
+      const plazaDl = event.target.closest("[data-skill-plaza-dl]");
+      if (plazaDl) {
+        event.preventDefault();
+        event.stopPropagation();
+        const id = plazaDl.getAttribute("data-skill-plaza-dl") || "";
+        const sk = skillPlazaSkills.find((s) => s.id === id);
+        showSkillPlazaToast(sk ? `已开始下载「${sk.name}」（演示）` : "下载");
+        return;
+      }
+
+      const plazaAddMine = event.target.closest("[data-skill-plaza-add-mine]");
+      if (plazaAddMine) {
+        event.preventDefault();
+        event.stopPropagation();
+        addPlazaSkillToMine(plazaAddMine.getAttribute("data-skill-plaza-add-mine") || "");
+        return;
+      }
+
+      const plazaDep = event.target.closest("[data-skill-plaza-dep]");
+      if (plazaDep) {
+        event.stopPropagation();
+        return;
+      }
+
+      const plazaCard = event.target.closest("[data-skill-plaza-card]");
+      if (plazaCard) {
+        event.preventDefault();
+        const id = plazaCard.getAttribute("data-skill-plaza-card") || "";
+        const sk = skillPlazaSkills.find((s) => s.id === id);
+        showSkillPlazaToast(sk ? `查看技能「${sk.name}」（演示）` : "");
         return;
       }
 
@@ -315,6 +636,24 @@
         state.enterprise.query = searchInput.value || "";
         render();
       }
+
+      const plazaSearch = event.target.closest("[data-skill-plaza-search]");
+      if (plazaSearch) {
+        state.skillPlaza.query = plazaSearch.value || "";
+        render();
+      }
+
+      const mineSearch = event.target.closest("[data-skill-mine-search]");
+      if (mineSearch) {
+        state.skillMine.query = mineSearch.value || "";
+        state.skillMine.page = 1;
+        render();
+      }
+
+      const mineJumpField = event.target.closest("[data-skill-mine-jump]");
+      if (mineJumpField) {
+        state.skillMine.jumpInput = mineJumpField.value || "";
+      }
     });
 
     nodes.stream.addEventListener("keydown", (event) => {
@@ -332,8 +671,24 @@
         }
       }
 
+      const mineJumpKey = event.target.closest("[data-skill-mine-jump]");
+      if (mineJumpKey && event.key === "Enter") {
+        event.preventDefault();
+        applySkillMineJump();
+        return;
+      }
+
       const clarifyInput = event.target.closest("[data-clarify-custom-input]");
-      if (!clarifyInput) return;
+      if (!clarifyInput) {
+        const plazaCardKey = event.target.closest("[data-skill-plaza-card]");
+        if (plazaCardKey && (event.key === "Enter" || event.key === " ")) {
+          event.preventDefault();
+          const id = plazaCardKey.getAttribute("data-skill-plaza-card") || "";
+          const sk = skillPlazaSkills.find((s) => s.id === id);
+          showSkillPlazaToast(sk ? `查看技能「${sk.name}」（演示）` : "");
+        }
+        return;
+      }
       if (event.key !== "Enter") return;
       event.preventDefault();
       submitClarifyCustomAnswer();
@@ -457,7 +812,7 @@
         const modeButton = event.target.closest("[data-runtime-send-mode]");
         if (!modeButton) return;
         event.preventDefault();
-        state.runtimeSend.mode = modeButton.getAttribute("data-runtime-send-mode") === "steer" ? "steer" : "queue";
+        state.runtimeSend.mode = modeButton.getAttribute("data-runtime-send-mode") === "parallel" ? "parallel" : "queue";
         state.runtimeSend.menuOpen = false;
         renderRuntimeSendControls();
         updateComposerSendButton();
@@ -546,6 +901,18 @@
       renderRuntimeQueueDock();
     });
 
+    document.addEventListener("keydown", (event) => {
+      if (state.route !== "product") return;
+      if (event.key !== "ArrowRight" && event.key !== "ArrowLeft") return;
+      if (event.target.closest("input, textarea, select, [contenteditable='true']")) return;
+      event.preventDefault();
+      if (event.key === "ArrowRight") {
+        advanceProductDocFlow();
+      } else {
+        retreatProductDocFlow();
+      }
+    });
+
     nodes.composerTextarea.addEventListener("keydown", (event) => {
       if (event.key !== "Enter" || event.shiftKey) return;
       if (skillUI.open) return;
@@ -579,7 +946,7 @@
     if (!nodes.panelResizer) return;
     nodes.panelResizer.addEventListener("mousedown", startPanelResize);
     nodes.panelResizer.addEventListener("keydown", (event) => {
-      if (state.route === "agents") return;
+      if (isStandaloneRoute()) return;
       if (event.key === "ArrowLeft") {
         event.preventDefault();
         setRightPanelWidth(state.panel.width + 24);
@@ -594,7 +961,7 @@
   }
 
   function startPanelResize(event) {
-    if (state.route === "agents") return;
+    if (isStandaloneRoute()) return;
     event.preventDefault();
     state.panel.resizing = true;
     state.panel.resizeStartX = event.clientX;
@@ -622,12 +989,20 @@
     syncShell();
   }
 
+  function isStandaloneRoute(route = state.route) {
+    return route === "agents" || route === "automation" || route === "skillhub" || route === "product";
+  }
+
   function hydrateRouteFromHash() {
     const hash = String(window.location.hash || "").replace(/^#/, "").trim();
     if (hash === "agents") {
       state.route = "agents";
     } else if (hash === "automation") {
       state.route = "automation";
+    } else if (hash === "skillhub") {
+      state.route = "skillhub";
+    } else if (hash === "product") {
+      state.route = "product";
     } else {
       state.route = "chat";
     }
@@ -927,12 +1302,21 @@
   }
 
   function navigate(route) {
-    const nextRoute = route === "agents" ? "agents" : route === "automation" ? "automation" : "chat";
+    const nextRoute =
+      route === "agents"
+        ? "agents"
+        : route === "automation"
+          ? "automation"
+          : route === "skillhub"
+            ? "skillhub"
+            : route === "product"
+              ? "product"
+              : "chat";
     if (window.location.hash !== `#${nextRoute}`) {
       window.location.hash = nextRoute;
     }
     state.route = nextRoute;
-    if (state.route === "agents" || state.route === "automation") {
+    if (isStandaloneRoute()) {
       stopEnterpriseRunTimer();
       render();
       return;
@@ -1159,7 +1543,24 @@
     }
 
     const current = steps[state.currentStep - 1];
+    if (current?.blockAdvanceUntilComplete && state.runtime[current.id] !== "success") {
+      render();
+      scheduleTransition();
+      return;
+    }
     if (current?.hitl) {
+      if (current.hitl === "permission") {
+        if (isPermissionAllowed(state.hitl.permission)) {
+          goTo(getPermissionAdvanceStep(current));
+          return;
+        }
+        if (isPermissionDenied(state.hitl.permission)) {
+          render();
+          return;
+        }
+        resolveHitl(current.hitl, "allow-once");
+        return;
+      }
       resolveHitl(current.hitl, "next");
       return;
     }
@@ -1175,7 +1576,24 @@
       state.answers[clarifyItem.questionKey] = fallback;
     }
     state.hitl[kind] = source || "default";
+    if (kind === "permission") {
+      render();
+      return;
+    }
     goTo(state.currentStep + 1);
+  }
+
+  function isPermissionAllowed(value) {
+    return value === "allow-once" || value === "always-allow" || value === "next";
+  }
+
+  function isPermissionDenied(value) {
+    return value === "deny-permission";
+  }
+
+  function getPermissionAdvanceStep(step) {
+    const tool = step?.items?.find((item) => item.kind === "tool_call" && item.status === "needs_approval");
+    return tool?.advanceTo || step?.advanceTo || state.currentStep + 1;
   }
 
   function handleHitlAction(action, choice) {
@@ -1194,7 +1612,7 @@
       case "allow-once":
       case "always-allow":
         state.hitl.permission = action;
-        goTo(state.currentStep + 1);
+        render();
         break;
       case "deny-permission":
         state.hitl.permission = action;
@@ -1325,9 +1743,11 @@
   function syncShell() {
     nodes.appShell.classList.toggle("route-agents", state.route === "agents");
     nodes.appShell.classList.toggle("route-automation", state.route === "automation");
+    nodes.appShell.classList.toggle("route-skillhub", state.route === "skillhub");
+    nodes.appShell.classList.toggle("route-product", state.route === "product");
     nodes.appShell.classList.toggle("route-chat", state.route === "chat");
     nodes.appShell.classList.toggle("preview-focused", state.panel.activeTab === "preview");
-    const shellPanelsHidden = state.route === "agents" || state.route === "automation";
+    const shellPanelsHidden = isStandaloneRoute();
     nodes.composerCard.hidden = shellPanelsHidden;
     if (nodes.composerProgressDock) nodes.composerProgressDock.hidden = shellPanelsHidden || !shouldShowComposerProgressDock();
     if (nodes.runtimeQueueDock && shellPanelsHidden) nodes.runtimeQueueDock.hidden = true;
@@ -1335,53 +1755,9 @@
     if (nodes.panelResizer) nodes.panelResizer.hidden = shellPanelsHidden;
     nodes.appShell.style.setProperty("--right-panel-width", `${state.panel.width}px`);
 
-    const header = getHeaderMeta();
-    nodes.sessionTitle.textContent = header.title;
-    nodes.sessionSubtitle.textContent = header.subtitle;
-
-    if (nodes.navList) {
-      nodes.navList.querySelectorAll("[data-route]").forEach((button) => {
-        button.classList.toggle("active", button.getAttribute("data-route") === state.route);
-      });
-    }
-  }
-
-  function getHeaderMeta() {
-    if (state.route === "agents") {
-      return {
-        title: "企业级智能体广场",
-        subtitle: "按照领域浏览企业级智能体，一键召唤专业智能体"
-      };
-    }
-
-    if (state.route === "automation") {
-      return {
-        title: "自动化任务",
-        subtitle: "管理 Agent 的定时执行任务、任务执行记录和事件触发任务"
-      };
-    }
-
-    if (state.chatMode === "enterprise_draft") {
-      const agent = getEnterpriseDraftAgent();
-      return {
-        title: agent?.name || "企业级智能体会话",
-        subtitle: agent ? `企业级智能体 · 发送后自动执行 mock 会话` : "请选择一个企业级智能体开始会话"
-      };
-    }
-
-    if (state.chatMode === "enterprise_session") {
-      const session = getEnterpriseSession(state.enterprise.activeSessionId);
-      return {
-        title: session?.agentName || "企业级智能体会话",
-        subtitle: session ? `会话 ID: ${session.id} · 智能体: ${session.agentName}` : "企业级智能体会话"
-      };
-    }
-
-    const active = getActiveSession();
-    return {
-      title: active?.title || DEFAULT_HEADER.title,
-      subtitle: DEFAULT_HEADER.subtitle
-    };
+    nodes.appShell.querySelectorAll("[data-route]").forEach((button) => {
+      button.classList.toggle("active", button.getAttribute("data-route") === state.route);
+    });
   }
 
   function renderNotices() {
@@ -1548,6 +1924,854 @@
     </button>`;
   }
 
+  function skillPlazaHasChineseText(value) {
+    return /[\u4e00-\u9fff]/.test(value);
+  }
+
+  function getSkillPlazaSourceText(skill) {
+    return skill.sourceType === "platform" ? "AgentFoundry 精选" : skill.author;
+  }
+
+  function getSkillPlazaAudienceBadgeLabel(skill) {
+    const row = skillPlazaCategoryFilters.find((f) => f.value === skill.audienceCategory);
+    return row ? row.label : "通用";
+  }
+
+  function getSkillPlazaIconId(skill) {
+    const n = skill.name;
+    if (n.includes("公文")) return "icon-edit";
+    if (n.includes("制度") || n.includes("流程")) return "icon-doc";
+    if (n.includes("问数")) return "icon-chart-bars";
+    if (n.includes("邮件")) return "icon-mail";
+    if (n.includes("通知") || n.includes("蓝信")) return "icon-bell";
+    if (n.includes("差旅") || n.includes("报销")) return "icon-plane-ticket";
+    switch (skill.audienceCategory) {
+      case "dev":
+        return "icon-wrench";
+      case "data":
+        return "icon-chart-bars";
+      case "communication":
+        return "icon-messages";
+      case "content":
+        return "icon-building";
+      case "efficiency":
+        return "icon-spark";
+      case "security":
+        return "icon-shield";
+      default:
+        return "icon-agent";
+    }
+  }
+
+  function isSkillPlazaFavorite(skill) {
+    const d = Boolean(skill.isFavorite);
+    return state.skillPlazaFavoriteOverrides[skill.id] !== undefined
+      ? state.skillPlazaFavoriteOverrides[skill.id]
+      : d;
+  }
+
+  function toggleSkillPlazaFavorite(skillId) {
+    const skill = skillPlazaSkills.find((s) => s.id === skillId);
+    if (!skill) return;
+    const def = Boolean(skill.isFavorite);
+    const cur = isSkillPlazaFavorite(skill);
+    const next = !cur;
+    if (next === def) {
+      delete state.skillPlazaFavoriteOverrides[skillId];
+    } else {
+      state.skillPlazaFavoriteOverrides[skillId] = next;
+    }
+  }
+
+  function filterSkillPlazaSkills() {
+    const q = state.skillPlaza.query.trim().toLowerCase();
+    const src = state.skillPlaza.source;
+    const cat = state.skillPlaza.category;
+    const sort = state.skillPlaza.sort;
+
+    const list = skillPlazaSkills.filter((skill) => {
+      const matchesSource =
+        src === "all" ? true : src === "favorite" ? isSkillPlazaFavorite(skill) : skill.sourceType === src;
+      const matchesCat = cat === "all" || skill.audienceCategory === cat;
+      if (!q) return matchesSource && matchesCat;
+      const blob = [skill.name, skill.description, skill.category, ...(skill.tags || [])].join(" ").toLowerCase();
+      return matchesSource && matchesCat && blob.includes(q);
+    });
+
+    return list.sort((left, right) => {
+      if (sort === "updatedAt") {
+        const d = right.publishedAt.localeCompare(left.publishedAt, "zh-CN");
+        if (d !== 0) return d;
+      } else {
+        const d = right.downloads - left.downloads;
+        if (d !== 0) return d;
+      }
+      const c = Number(skillPlazaHasChineseText(right.name)) - Number(skillPlazaHasChineseText(left.name));
+      if (c !== 0) return c;
+      return left.name.localeCompare(right.name, "zh-CN");
+    });
+  }
+
+  function findSkillMineItemById(id) {
+    return [...skillMineItems, ...state.skillMine.importedFromPlaza].find((i) => i.id === id);
+  }
+
+  function plazaPublishedAtToMineUpdatedAt(publishedAt) {
+    const s = String(publishedAt || "").trim();
+    const m = /^(\d{2})-(\d{2})\s+(\d{1,2}:\d{2})$/.exec(s);
+    if (!m) return s;
+    return `2026-${m[1]}-${m[2]} ${m[3]}`;
+  }
+
+  function addPlazaSkillToMine(plazaId) {
+    const skill = skillPlazaSkills.find((s) => s.id === plazaId);
+    if (!skill) return;
+    const mineId = `from-plaza-${skill.id}`;
+    delete state.skillMine.deletedIds[mineId];
+    delete state.skillMine.enabledOverrides[mineId];
+    const entry = {
+      id: mineId,
+      origin: "mine",
+      name: skill.name,
+      description: skill.description,
+      updatedAt: plazaPublishedAtToMineUpdatedAt(skill.publishedAt),
+      defaultEnabled: true,
+      symbolId: getSkillPlazaIconId(skill)
+    };
+    const arr = state.skillMine.importedFromPlaza;
+    const idx = arr.findIndex((x) => x.id === mineId);
+    if (idx >= 0) arr[idx] = entry;
+    else arr.push(entry);
+    state.skillHubTab = "mine";
+    showSkillPlazaToast(`已添加「${skill.name}」至我的 Claw`);
+    render();
+  }
+
+  function filterSkillMineList() {
+    const q = state.skillMine.query.trim().toLowerCase();
+    const src = state.skillMine.source;
+    let list = [...skillMineItems, ...state.skillMine.importedFromPlaza].filter(
+      (item) => !state.skillMine.deletedIds[item.id]
+    );
+
+    if (src === "builtin") {
+      list = list.filter((item) => item.origin === "builtin");
+    } else if (src === "mine") {
+      list = list.filter((item) => item.origin === "mine");
+    }
+
+    if (!q) return list;
+
+    return list.filter((item) =>
+      [item.name, item.description || ""].join(" ").toLowerCase().includes(q)
+    );
+  }
+
+  function isSkillMineEnabled(item) {
+    if (state.skillMine.enabledOverrides[item.id] !== undefined) {
+      return state.skillMine.enabledOverrides[item.id];
+    }
+    return item.defaultEnabled !== false;
+  }
+
+  function getSkillMineRowSymbolId(item) {
+    if (item.symbolId) return item.symbolId;
+    const key = item.icon || "file";
+    if (key === "plane") return "icon-plane-ticket";
+    if (key === "code") return "icon-code";
+    if (key === "doc") return "icon-doc";
+    if (key === "chart") return "icon-chart-bars";
+    if (key === "edit") return "icon-edit";
+    return "icon-file";
+  }
+
+  function getMineVisiblePageIndices(current, total) {
+    if (total <= 7) {
+      return Array.from({ length: total }, (_, i) => i + 1);
+    }
+    const s = new Set([1, total]);
+    for (let p = current - 2; p <= current + 2; p += 1) {
+      if (p >= 1 && p <= total) s.add(p);
+    }
+    return [...s].sort((a, b) => a - b);
+  }
+
+  function mineEllipsisBefore(page, prev) {
+    return prev !== undefined && page - prev > 1;
+  }
+
+  function renderSkillPlazaCard(skill, index) {
+    const fav = isSkillPlazaFavorite(skill);
+    const badge = getSkillPlazaAudienceBadgeLabel(skill);
+    const srcLine = getSkillPlazaSourceText(skill);
+    const timeLine =
+      skill.sourceType === "platform" ? `更新于 ${skill.publishedAt}` : `发布于 ${skill.publishedAt}（${skill.publishedBy}）`;
+    const deps = skill.declaredDependencies || [];
+    const depTitle = deps.map((d) => d.name).join("\n");
+    const stagger = `animation-delay:${index * 55}ms`;
+    const iconId = getSkillPlazaIconId(skill);
+
+    return `<article class="skill-plaza-card skills-stagger" style="${stagger}" role="button" tabindex="0" data-skill-plaza-card="${escapeAttr(skill.id)}">
+      <div class="skill-plaza-card-inner">
+        <div class="skill-plaza-card-head">
+          <div class="skill-plaza-card-title-block">
+            <div class="skill-plaza-icon" aria-hidden="true"><svg><use href="#${iconId}"></use></svg></div>
+            <div class="skill-plaza-title-meta">
+              <div class="skill-plaza-name-row">
+                <h3 class="skill-plaza-name">${escapeHTML(skill.name)}</h3>
+                <span class="skill-plaza-badge">${escapeHTML(badge)}</span>
+              </div>
+              <div class="skill-plaza-source-row">
+                <span class="skill-plaza-source ${skill.sourceType === "platform" ? "is-platform" : ""}">${escapeHTML(srcLine)}</span>
+                <span class="skill-plaza-dot">·</span>
+                <span class="skill-plaza-time">${escapeHTML(timeLine)}</span>
+              </div>
+            </div>
+          </div>
+          <button type="button" class="skill-plaza-fav ${fav ? "is-active" : ""}" data-skill-plaza-fav="${escapeAttr(
+      skill.id
+    )}" aria-label="${fav ? "取消收藏" : "收藏"}" title="${fav ? "取消收藏" : "收藏"}">
+            <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+              <path d="M12 4.5 14.1 9.9 20 10.8 15.5 15 16.6 21 12 18 7.4 21 8.5 15 4 10.8l5.9-.9L12 4.5Z" fill="${fav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" />
+            </svg>
+          </button>
+        </div>
+        <p class="skill-plaza-desc">${escapeHTML(skill.description)}</p>
+        <div class="skill-plaza-card-foot">
+          <div class="skill-plaza-foot-left">
+            <span class="skill-plaza-dl-pill"><span class="skill-plaza-dl-num">${skill.downloads.toLocaleString()}</span> 下载</span>
+            ${
+              deps.length
+                ? `<button type="button" class="skill-plaza-dep" data-skill-plaza-dep="${escapeAttr(skill.id)}" title="${escapeAttr(depTitle)}"><svg><use href="#icon-boxes"></use></svg>依赖声明</button>`
+                : ""
+            }
+          </div>
+          <div class="skill-plaza-foot-actions">
+            <button type="button" class="skill-plaza-dl-btn" data-skill-plaza-dl="${escapeAttr(skill.id)}" title="下载" aria-label="下载">${icon("download")}</button>
+            <button type="button" class="skill-plaza-add-claw" data-skill-plaza-add-mine="${escapeAttr(skill.id)}" title="添加至我的Claw" aria-label="添加至我的Claw">${icon("plus")}</button>
+          </div>
+        </div>
+      </div>
+    </article>`;
+  }
+
+  let skillPlazaToastTimer = null;
+  function showSkillPlazaToast(message) {
+    let el = document.getElementById("skillPlazaToast");
+    if (!el) {
+      el = document.createElement("div");
+      el.id = "skillPlazaToast";
+      el.className = "skill-plaza-toast";
+      document.body.appendChild(el);
+    }
+    el.textContent = message;
+    el.hidden = false;
+    el.classList.add("is-visible");
+    window.clearTimeout(skillPlazaToastTimer);
+    skillPlazaToastTimer = window.setTimeout(() => {
+      el.classList.remove("is-visible");
+    }, 2200);
+  }
+
+  function applySkillMineJump() {
+    const n = Number.parseInt(String(state.skillMine.jumpInput || "").trim(), 10);
+    if (Number.isNaN(n) || n < 1) {
+      showSkillPlazaToast("请输入有效页码。");
+      return;
+    }
+    const filtered = filterSkillMineList();
+    const totalPages = Math.max(1, Math.ceil(filtered.length / state.skillMine.pageSize));
+    state.skillMine.page = Math.min(n, totalPages);
+    state.skillMine.jumpInput = String(state.skillMine.page);
+    render();
+  }
+
+  function renderSkillPlazaPanel() {
+    const sp = state.skillPlaza;
+    const filtered = filterSkillPlazaSkills();
+    const chipsSrc = skillPlazaSourceFilters
+      .map(
+        (f) =>
+          `<button type="button" class="skill-plaza-chip${sp.source === f.value ? " is-active" : ""}" data-skill-plaza-source="${escapeAttr(f.value)}">${escapeHTML(f.label)}</button>`
+      )
+      .join("");
+    const chipsCat = skillPlazaCategoryFilters
+      .map(
+        (f) =>
+          `<button type="button" class="skill-plaza-chip${sp.category === f.value ? " is-active" : ""}" data-skill-plaza-category="${escapeAttr(f.value)}">${escapeHTML(f.label)}</button>`
+      )
+      .join("");
+    const sortDownloadsActive = sp.sort === "downloads";
+    const sortUpdatedActive = sp.sort === "updatedAt";
+
+    const grid =
+      filtered.length > 0
+        ? `<div class="skill-plaza-grid">${filtered.map((s, i) => renderSkillPlazaCard(s, i)).join("")}</div>`
+        : `<div class="skill-plaza-empty">当前筛选条件下没有匹配的技能模板，试试切换来源、能力类目或搜索关键词。</div>`;
+
+    return `<div class="skill-plaza-canvas skill-hub-panel">
+        <div class="skill-plaza-top">
+          <div class="skill-plaza-hero">
+            <h2 class="skill-plaza-title skills-display">技能广场</h2>
+          </div>
+          <label class="skill-plaza-search-label">
+            ${icon("search")}
+            <input type="search" data-skill-plaza-search value="${escapeAttr(sp.query)}" placeholder="搜索 技能名称、类目或标签" autocomplete="off" />
+          </label>
+        </div>
+        <div class="skill-plaza-filters">
+          <div class="skill-plaza-filter-row">
+            <span class="skill-plaza-filter-label">来源</span>
+            <div class="skill-plaza-chips">${chipsSrc}</div>
+          </div>
+          <div class="skill-plaza-filter-row skill-plaza-filter-row--split">
+            <span class="skill-plaza-filter-label">类目</span>
+            <div class="skill-plaza-chips skill-plaza-chips--wrap">${chipsCat}</div>
+            <div class="skill-plaza-sort">
+              <span class="skill-plaza-filter-label">排序</span>
+              <div class="skill-plaza-sort-btns">
+                <button type="button" class="skill-plaza-chip skill-plaza-sort-chip${sortDownloadsActive ? " is-active" : ""}" data-skill-plaza-sort="downloads">下载量${sortDownloadsActive ? " ↓" : ""}</button>
+                <button type="button" class="skill-plaza-chip skill-plaza-sort-chip${sortUpdatedActive ? " is-active" : ""}" data-skill-plaza-sort="updatedAt">最新更新</button>
+              </div>
+            </div>
+          </div>
+        </div>
+        ${grid}
+      </div>`;
+  }
+
+  function renderSkillMinePanel() {
+    const sm = state.skillMine;
+    const CLAW_PRIMARY = "#1890ff";
+    const filtered = filterSkillMineList();
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / sm.pageSize));
+    if (sm.page > totalPages) state.skillMine.page = totalPages;
+    if (sm.page < 1) state.skillMine.page = 1;
+    const safePage = state.skillMine.page;
+    const start = (safePage - 1) * sm.pageSize;
+    const pageItems = filtered.slice(start, start + sm.pageSize);
+    const visiblePages = getMineVisiblePageIndices(safePage, totalPages);
+
+    const originSeg = ["all", "builtin", "mine"]
+      .map((v) => {
+        const labels = { all: "全部", builtin: "内置", mine: "我的" };
+        const act = sm.source === v;
+        return `<button type="button" class="skill-mine-seg${act ? " is-active" : ""}" data-skill-mine-origin="${escapeAttr(v)}">${escapeHTML(labels[v])}</button>`;
+      })
+      .join("");
+
+    const rows = pageItems
+      .map((item) => {
+        const on = isSkillMineEnabled(item);
+        const sym = getSkillMineRowSymbolId(item);
+        const tag = item.origin === "builtin" ? "内置" : "我的";
+        return `<li class="skill-mine-row skill-mine-row--v2">
+      <div class="skill-mine-row-ico-wrap" aria-hidden="true">
+        <div class="skill-mine-row-ico"><svg><use href="#${sym}"></use></svg></div>
+      </div>
+      <div class="skill-mine-row-body">
+        <div class="skill-mine-row-headline">
+          <span class="skill-mine-row-name">${escapeHTML(item.name)}</span>
+          <span class="skill-mine-origin-tag">${escapeHTML(tag)}</span>
+          <span class="skill-mine-row-time">更新于 ${escapeHTML(item.updatedAt)}</span>
+        </div>
+        <p class="skill-mine-row-desc">${escapeHTML(item.description || "")}</p>
+      </div>
+      <div class="skill-mine-row-ctrl">
+        <button
+          type="button"
+          class="skill-mine-switch${on ? " is-on" : ""}"
+          role="switch"
+          aria-checked="${on ? "true" : "false"}"
+          data-skill-mine-toggle="${escapeAttr(item.id)}"
+          aria-label="${on ? "停用技能" : "启用技能"}"
+        >
+          <span class="skill-mine-switch-track" aria-hidden="true"><span class="skill-mine-switch-thumb"></span></span>
+        </button>
+        <button
+          type="button"
+          class="skill-mine-delete${item.origin === "builtin" ? " skill-mine-delete--disabled" : ""}"
+          ${item.origin === "builtin" ? "disabled " : ""}aria-disabled="${item.origin === "builtin" ? "true" : "false"}"
+          data-skill-mine-delete="${escapeAttr(item.id)}"
+        >删除</button>
+      </div>
+    </li>`;
+      })
+      .join("");
+
+    const pageButtons = visiblePages
+      .map((page, idx) => {
+        const prev = idx > 0 ? visiblePages[idx - 1] : undefined;
+        const ell = mineEllipsisBefore(page, prev) ? `<span class="skill-mine-page-gap">…</span>` : "";
+        const active = safePage === page;
+        return `${ell}<button type="button" class="skill-mine-page-num${active ? " is-active" : ""}" data-skill-mine-page="${page}"${active ? ` style="background:${CLAW_PRIMARY};color:#fff"` : ""}>${page}</button>`;
+      })
+      .join("");
+
+    const prevDis = safePage <= 1;
+    const nextDis = safePage >= totalPages;
+
+    const sizeBtns = [10, 20, 50]
+      .map(
+        (n) =>
+          `<button type="button" class="skill-mine-size${sm.pageSize === n ? " is-active" : ""}" data-skill-mine-page-size="${n}">${n} 条/页</button>`
+      )
+      .join("");
+
+    const listBlock = pageItems.length
+      ? `<ul class="skill-mine-ul skill-mine-ul--v2">${rows}</ul>`
+      : `<div class="skill-mine-empty-inline">暂无匹配的技能，请调整筛选或搜索条件。</div>`;
+
+    return `<div class="skill-mine-panel skill-hub-panel skill-mine-panel--v2">
+      <div class="skill-mine-toolbar skill-mine-toolbar--v2">
+        <div class="skill-mine-origin-block">
+          <span class="skill-mine-origin-label">技能来源</span>
+          <div class="skill-mine-seg-group">${originSeg}</div>
+        </div>
+        <label class="skill-mine-search skill-mine-search--center">
+          ${icon("search")}
+          <input type="search" data-skill-mine-search value="${escapeAttr(sm.query)}" placeholder="请输入技能名称" autocomplete="off" aria-label="搜索技能名称" />
+        </label>
+        <div class="skill-mine-toolbar-right">
+          <button type="button" class="skill-mine-ico-btn" data-skill-mine-refresh title="刷新列表" aria-label="刷新列表">${icon("refresh")}</button>
+          <button type="button" class="skill-mine-import" data-skill-mine-import style="background:${CLAW_PRIMARY}">${icon("upload")}<span>导入</span></button>
+        </div>
+      </div>
+      <div class="skill-mine-scroll skill-mine-scroll--v2">${listBlock}</div>
+      <div class="skill-mine-footer">
+        <div class="skill-mine-pager">
+          <span class="skill-mine-count">共 ${total} 条</span>
+          <button type="button" class="skill-mine-ico-btn skill-mine-page-arrow" data-skill-mine-prev${prevDis ? " disabled" : ""} aria-label="上一页"><svg class="skill-mine-chevron skill-mine-chevron--prev" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
+          <div class="skill-mine-page-nums">${pageButtons}</div>
+          <button type="button" class="skill-mine-ico-btn skill-mine-page-arrow" data-skill-mine-next${nextDis ? " disabled" : ""} aria-label="下一页"><svg class="skill-mine-chevron skill-mine-chevron--next" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
+          <div class="skill-mine-size-group">${sizeBtns}</div>
+          <div class="skill-mine-jump">
+            <span>前往</span>
+            <input class="skill-mine-jump-input" type="text" inputmode="numeric" data-skill-mine-jump value="${escapeAttr(sm.jumpInput)}" />
+            <span>页</span>
+            <button type="button" class="skill-mine-btn skill-mine-btn--outline skill-mine-jump-go" data-skill-mine-jump-apply>确定</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }
+
+  function renderSkillHubPage() {
+    const tab = state.skillHubTab;
+    const body = tab === "plaza" ? renderSkillPlazaPanel() : renderSkillMinePanel();
+    return `<section class="skill-plaza-root skill-hub-root skills-hub-cecloud">
+      <div class="skill-plaza-ambient" aria-hidden="true">
+        <div class="skill-plaza-orb skill-plaza-orb-a"></div>
+        <div class="skill-plaza-orb skill-plaza-orb-b"></div>
+      </div>
+      <div class="skill-hub-shell">
+        <nav class="skill-hub-tabs" aria-label="技能中心">
+          <button type="button" class="skill-hub-tab${tab === "plaza" ? " is-active" : ""}" data-skill-hub-tab="plaza">技能广场</button>
+          <button type="button" class="skill-hub-tab${tab === "mine" ? " is-active" : ""}" data-skill-hub-tab="mine">我的技能</button>
+        </nav>
+        <div class="skill-hub-body">${body}</div>
+      </div>
+    </section>`;
+  }
+
+  function getProductDocFlow(tab = state.productDocs.tab) {
+    const safeTab = tab === "code" ? "code" : "request";
+    if (!state.productDocs.flows[safeTab]) {
+      state.productDocs.flows[safeTab] = { phase: "pending", outcome: "success" };
+    }
+    return state.productDocs.flows[safeTab];
+  }
+
+  function handleProductDocAction(action) {
+    const flow = getProductDocFlow();
+    if (action === "reset") {
+      flow.phase = "pending";
+      flow.outcome = "success";
+      render();
+      return;
+    }
+    if (flow.phase !== "approval_required") return;
+    if (action === "approve") {
+      flow.phase = "running";
+    } else if (action === "deny") {
+      flow.phase = "denied";
+    }
+    render();
+  }
+
+  function handleProductDocOutcome(outcome) {
+    const flow = getProductDocFlow();
+    flow.outcome = outcome === "failed" ? "failed" : "success";
+    if (flow.phase === "running" || flow.phase === "success" || flow.phase === "failed") {
+      flow.phase = flow.outcome;
+    }
+    render();
+  }
+
+  function jumpProductDocPhase(phase) {
+    if (!PRODUCT_DOC_STAGES.some((stage) => stage.id === phase)) return;
+    const flow = getProductDocFlow();
+    flow.phase = phase;
+    if (phase === "success") {
+      flow.outcome = "success";
+    } else if (phase === "failed") {
+      flow.outcome = "failed";
+    }
+    render();
+  }
+
+  function advanceProductDocFlow() {
+    const flow = getProductDocFlow();
+    if (flow.phase === "pending") {
+      flow.phase = "approval_required";
+    } else if (flow.phase === "running") {
+      flow.phase = flow.outcome === "failed" ? "failed" : "success";
+    } else if (flow.phase === "denied" || flow.phase === "success" || flow.phase === "failed") {
+      flow.phase = "pending";
+      flow.outcome = "success";
+    }
+    render();
+  }
+
+  function retreatProductDocFlow() {
+    const flow = getProductDocFlow();
+    const order = ["pending", "approval_required", "denied", "running", "success", "failed"];
+    const index = order.indexOf(flow.phase);
+    if (index <= 0) return;
+    flow.phase = order[index - 1];
+    if (flow.phase !== "failed") {
+      flow.outcome = "success";
+    }
+    render();
+  }
+
+  function productDocReachIndex(phase) {
+    const order = {
+      pending: 0,
+      approval_required: 1,
+      denied: 2,
+      running: 3,
+      success: 4,
+      failed: 5
+    };
+    return order[phase] ?? 0;
+  }
+
+  function productDocCardState(stageId, phase) {
+    if (stageId === phase) return "is-current";
+    const currentIndex = productDocReachIndex(phase);
+    const stageIndex = productDocReachIndex(stageId);
+    if (phase === "denied") {
+      return stageId === "pending" || stageId === "approval_required" ? "is-past" : "is-future";
+    }
+    if (phase === "failed") {
+      return ["pending", "approval_required", "running"].includes(stageId) ? "is-past" : "is-future";
+    }
+    if (phase === "success") {
+      return ["pending", "approval_required", "running"].includes(stageId) ? "is-past" : "is-future";
+    }
+    return stageIndex < currentIndex ? "is-past" : "is-future";
+  }
+
+  function renderProductDocPage() {
+    const tab = state.productDocs.tab === "code" ? "code" : "request";
+    const flow = getProductDocFlow(tab);
+    const demo = PRODUCT_DOC_DEMOS[tab];
+    const phaseConfig = PRODUCT_DOC_STAGES.find((s) => s.id === flow.phase) || PRODUCT_DOC_STAGES[0];
+    const hintText = productDocKeyHint(flow.phase);
+    const tabButtons = PRODUCT_DOC_TABS.map((item) => {
+      const active = item.id === tab;
+      return `<button type="button" class="product-doc-tab${active ? " is-active" : ""}" data-product-doc-tab="${escapeAttr(item.id)}">
+        ${icon(item.icon)}
+        <span>${escapeHTML(item.label)}</span>
+      </button>`;
+    }).join("");
+
+    return `<section class="product-doc-page" tabindex="0" aria-label="工具调用状态说明">
+      <header class="product-doc-head">
+        <div>
+          <p class="product-doc-eyebrow">Tool Call Status</p>
+          <h2>工具调用状态说明</h2>
+          <p>通过左右方向键或左侧状态编号切换；审批态需要在页面点击同意或拒绝。</p>
+        </div>
+        <div class="product-doc-head-actions">
+          <span class="product-doc-current">当前：${escapeHTML(phaseConfig.code)} · ${escapeHTML(phaseConfig.label)}</span>
+          <button type="button" class="product-doc-reset" data-product-doc-action="reset">${icon("refresh")}<span>重置</span></button>
+        </div>
+      </header>
+      <nav class="product-doc-tabs" aria-label="工具调用类型">${tabButtons}</nav>
+      <div class="product-doc-workspace">
+        <aside class="product-doc-rail" aria-label="状态列表">
+          ${PRODUCT_DOC_STAGES.map((stage, index) => renderProductDocRailItem(stage, index, flow.phase)).join("")}
+          <div class="product-doc-key-hint">${escapeHTML(hintText)}</div>
+        </aside>
+        <div class="product-doc-stack">
+          ${renderProductDocStatusCard(phaseConfig, demo, flow, tab)}
+        </div>
+      </div>
+    </section>`;
+  }
+
+  function productDocKeyHint(phase) {
+    if (phase === "running") return "点击模拟成功或者模拟失败按钮查看不同执行结果分支";
+    if (phase === "denied" || phase === "success" || phase === "failed") return "已到终态，按 → 可重新开始";
+    return "按 ← / → 切换状态";
+  }
+
+  function renderProductDocRailItem(stage, index, phase) {
+    const stateClass = productDocCardState(stage.id, phase);
+    return `<button
+      type="button"
+      class="product-doc-rail-item ${stateClass} tone-${escapeAttr(stage.tone)}"
+      data-product-doc-phase="${escapeAttr(stage.id)}"
+      aria-current="${stage.id === phase ? "step" : "false"}"
+    >
+      <span class="product-doc-rail-num">${index + 1}</span>
+      <span class="product-doc-rail-code">${escapeHTML(stage.code)}</span>
+      <strong>${escapeHTML(stage.label)}</strong>
+    </button>`;
+  }
+
+  function renderToolStatePanel({
+    title,
+    status,
+    iconName = "tool",
+    body = "",
+    mode = "request",
+    collapsible = false,
+    open = true,
+    statusLabel = "",
+    elapsed = "",
+    extraClass = ""
+  }) {
+    const statusTone = toolStateTone(status);
+    const stateClass = `tone-${escapeAttr(statusTone)} mode-${escapeAttr(mode)} ${extraClass || ""}`.trim();
+    const statusBadge = renderToolStateStatus(status, statusLabel);
+    const elapsedHtml = elapsed ? `<span class="tool-state-elapsed">${escapeHTML(elapsed)}</span>` : "";
+    const toggleHtml = collapsible ? `<span class="tool-state-toggle" aria-hidden="true">${icon("chevron")}</span>` : "";
+    const bodyHtml = body && String(body).trim() ? `<div class="tool-state-body">${body}</div>` : "";
+    const headInner = `<span class="tool-state-icon">${icon(iconName)}</span>
+      <span class="tool-state-title">${escapeHTML(title)}</span>
+      <span class="tool-state-spacer"></span>
+      ${toggleHtml}
+      ${elapsedHtml}
+      ${statusBadge}`;
+
+    if (collapsible) {
+      return `<details class="tool-state-panel ${stateClass}"${open ? " open" : ""}>
+        <summary class="tool-state-head" aria-label="展开或收起工具调用详情">${headInner}</summary>
+        ${bodyHtml}
+      </details>`;
+    }
+
+    return `<article class="tool-state-panel ${stateClass}">
+      <div class="tool-state-head">${headInner}</div>
+      ${bodyHtml}
+    </article>`;
+  }
+
+  function toolStateTone(status) {
+    if (status === "success" || status === "success_collapsed" || status === "success_expanded") return "success";
+    if (status === "running") return "running";
+    if (status === "approval_required" || status === "needs_approval" || status === "destructive") return "approval";
+    if (status === "failed" || status === "error" || status === "denied" || status === "cancelled") return "failed";
+    return "pending";
+  }
+
+  function renderToolStateStatus(status, labelOverride = "") {
+    const tone = toolStateTone(status);
+    const defaults = {
+      pending: "等待执行",
+      approval: status === "destructive" ? "等待确认" : "等待授权",
+      running: "执行中",
+      success: "成功",
+      failed: status === "denied" ? "已拒绝" : "失败"
+    };
+    const label = labelOverride || defaults[tone] || String(status || "");
+    const prefix =
+      tone === "running"
+        ? '<span class="spinner"></span>'
+        : tone === "success"
+          ? icon("check")
+          : tone === "failed"
+            ? icon("x")
+            : tone === "approval"
+              ? icon("warning")
+              : '<span class="tool-state-dot"></span>';
+    return `<span class="tool-state-status tone-${escapeAttr(tone)}">${prefix}<span>${escapeHTML(label)}</span></span>`;
+  }
+
+  function renderProductDocStatusCard(stage, demo, flow, tab) {
+    const title = stage.id === "pending" ? demo.pendingTitle : stage.id === "running" ? demo.runningTitle : demo.title;
+    return renderToolStatePanel({
+      title,
+      status: stage.id,
+      iconName: tab === "code" ? "terminal" : "tool",
+      body: renderProductDocCardBody(stage.id, demo, flow, tab),
+      mode: tab === "code" ? "command" : "request",
+      collapsible: false,
+      statusLabel: stage.label,
+      extraClass: "product-doc-tool"
+    });
+  }
+
+  function renderProductDocCardBody(stageId, demo, flow, tab) {
+    if (tab === "code") {
+      return renderProductDocCommandBody(stageId, demo, flow);
+    }
+    if (stageId === "pending") {
+      return "";
+    }
+    if (stageId === "approval_required") {
+      return `<div class="product-approval-body">
+        <div class="product-approval-note">
+          ${icon("info")}
+          <div>
+            <strong>${escapeHTML(demo.approvalCopy)}</strong>
+            ${demo.approvalSubcopy ? `<span>${escapeHTML(demo.approvalSubcopy)}</span>` : ""}
+          </div>
+        </div>
+        ${renderProductDocRequestBlock(demo, tab, true)}
+        <div class="product-status-actions">
+          <button type="button" class="product-doc-btn secondary" data-product-doc-action="deny" ${flow.phase !== "approval_required" ? "disabled" : ""}>拒绝</button>
+          <button type="button" class="product-doc-btn primary" data-product-doc-action="approve" ${flow.phase !== "approval_required" ? "disabled" : ""}>允许</button>
+        </div>
+      </div>`;
+    }
+    if (stageId === "denied") {
+      return `${demo.deniedCopy ? `<p class="product-status-copy">${escapeHTML(demo.deniedCopy)}</p>` : ""}
+      ${tab === "request" ? renderProductDocRequestBlock(demo, tab, false) : ""}
+      <div class="product-denied-line">拒绝时间：2026-05-18 10:16:22</div>`;
+    }
+    if (stageId === "running") {
+      return `${demo.runningCopy ? `<p class="product-status-copy">${escapeHTML(demo.runningCopy)}</p>` : ""}
+        ${renderProductDocRequestBlock(demo, tab, true)}
+        <div class="tool-state-block">
+          <div class="tool-state-block-label">Response（接收中...）</div>
+          <div class="product-loading-line">正在等待服务器响应... <span class="spinner"></span></div>
+        </div>
+        <div class="product-outcome-row">
+          <span>执行结果分支</span>
+          <button type="button" class="product-outcome-btn${flow.outcome !== "failed" ? " is-active" : ""}" data-product-doc-outcome="success">模拟成功</button>
+          <button type="button" class="product-outcome-btn${flow.outcome === "failed" ? " is-active" : ""}" data-product-doc-outcome="failed">模拟失败</button>
+        </div>`;
+    }
+    if (stageId === "success") {
+      return `${demo.successCopy ? `<p class="product-status-copy">${escapeHTML(demo.successCopy)}</p>` : ""}
+        ${renderProductDocRequestBlock(demo, tab, false)}
+        ${renderProductDocResponseBlock(demo.successResponse, "success", tab)}`;
+    }
+    if (stageId === "failed") {
+      return `${demo.failedCopy ? `<p class="product-status-copy">${escapeHTML(demo.failedCopy)}</p>` : ""}
+        ${renderProductDocRequestBlock(demo, tab, false)}
+        ${renderProductDocResponseBlock(demo.errorResponse, "failed", tab, demo.failureDetailLabel)}`;
+    }
+    return "";
+  }
+
+  function renderProductDocCommandBody(stageId, demo, flow) {
+    const commandBlock = renderProductDocCommandBlock(demo, commandOutputForStage(stageId, demo));
+    if (stageId === "pending") {
+      return commandBlock;
+    }
+    if (stageId === "approval_required") {
+      return `<div class="product-approval-body product-command-approval">
+        <p class="product-status-copy">${escapeHTML(demo.approvalCopy)}</p>
+        ${demo.approvalSubcopy ? `<p class="product-command-subcopy">${escapeHTML(demo.approvalSubcopy)}</p>` : ""}
+        ${commandBlock}
+        <div class="product-status-actions">
+          <button type="button" class="product-doc-btn secondary" data-product-doc-action="deny" ${flow.phase !== "approval_required" ? "disabled" : ""}>拒绝</button>
+          <button type="button" class="product-doc-btn primary" data-product-doc-action="approve" ${flow.phase !== "approval_required" ? "disabled" : ""}>允许</button>
+        </div>
+      </div>`;
+    }
+    if (stageId === "denied") {
+      return `${commandBlock}
+        ${demo.deniedCopy ? `<p class="product-status-copy product-command-aftercopy">${escapeHTML(demo.deniedCopy)}</p>` : ""}`;
+    }
+    if (stageId === "running") {
+      return `${commandBlock}
+        <div class="product-command-running-line"><span class="spinner"></span><span>正在执行...</span></div>
+        <div class="product-outcome-row">
+          <span>执行结果分支</span>
+          <button type="button" class="product-outcome-btn${flow.outcome !== "failed" ? " is-active" : ""}" data-product-doc-outcome="success">模拟成功</button>
+          <button type="button" class="product-outcome-btn${flow.outcome === "failed" ? " is-active" : ""}" data-product-doc-outcome="failed">模拟失败</button>
+        </div>`;
+    }
+    if (stageId === "success") {
+      return commandBlock;
+    }
+    if (stageId === "failed") {
+      return commandBlock;
+    }
+    return commandBlock;
+  }
+
+  function commandOutputForStage(stageId, demo) {
+    if (stageId === "running") return demo.runningOutput || "";
+    if (stageId === "success") return demo.successOutput || "";
+    if (stageId === "failed") return demo.errorOutput || "";
+    return "";
+  }
+
+  function renderProductDocCommandBlock(demo, output = "") {
+    const lines = [`$ ${demo.command}`];
+    if (output) lines.push(output);
+    return renderToolStateCommandBlock(demo.commandType || "shell", lines.join("\n"));
+  }
+
+  function renderProductDocRequestBlock(demo, tab, includeCode) {
+    const codeBlock = tab === "code" && includeCode
+      ? renderToolStateCommandBlock("code", demo.code || "")
+      : "";
+    const request = {
+      endpoint: demo.requestLine,
+      ...(demo.request || {})
+    };
+    return `${renderToolStateIoBlocks(request, undefined)}${codeBlock}`;
+  }
+
+  function renderProductDocResponseBlock(response, tone, tab, label = "Response") {
+    if (tab === "code") return renderToolStateCommandBlock(label, formatJsonPlain(response));
+    return `<div class="tool-state-block">
+      <div class="tool-state-block-label">${escapeHTML(label)}</div>
+      <pre class="tool-state-pre tool-state-pre--json response-${escapeAttr(tone)}">${formatJsonHighlighted(response)}</pre>
+    </div>`;
+  }
+
+  function formatJsonPlain(value) {
+    try {
+      return JSON.stringify(value, null, 2);
+    } catch {
+      return String(value ?? "");
+    }
+  }
+
+  function renderToolStateCommandBlock(kind, content) {
+    return `<div class="tool-state-command-block">
+      <div class="tool-state-block-label">${escapeHTML(kind || "shell")}</div>
+      <pre class="tool-state-pre tool-state-pre--command">${escapeHTML(content || "")}</pre>
+    </div>`;
+  }
+
+  function renderToolStateIoBlocks(args, output, options = {}) {
+    const blocks = [];
+    const requestLabel = options.requestLabel || "Request";
+    const responseLabel = options.responseLabel || "Response";
+    blocks.push(`<div class="tool-state-block">
+      <div class="tool-state-block-label">${escapeHTML(requestLabel)}</div>
+      <pre class="tool-state-pre tool-state-pre--json">${formatJsonHighlighted(args || {})}</pre>
+    </div>`);
+    if (output !== null && output !== undefined) {
+      blocks.push(`<div class="tool-state-block">
+        <div class="tool-state-block-label">${escapeHTML(responseLabel)}</div>
+        <pre class="tool-state-pre tool-state-pre--json">${formatJsonHighlighted(output)}</pre>
+      </div>`);
+    }
+    return blocks.join("");
+  }
+
   function renderMessages() {
     if (state.route === "agents") {
       nodes.stream.innerHTML = renderEnterpriseAgentsPage();
@@ -1560,6 +2784,16 @@
       } else {
         nodes.stream.innerHTML = `<div class="panel-empty">自动化任务模块加载失败。</div>`;
       }
+      return;
+    }
+
+    if (state.route === "skillhub") {
+      nodes.stream.innerHTML = renderSkillHubPage();
+      return;
+    }
+
+    if (state.route === "product") {
+      nodes.stream.innerHTML = renderProductDocPage();
       return;
     }
 
@@ -1770,9 +3004,7 @@
     if (step.id === 9 && state.currentStep >= 10) return "";
 
     return step.items.map((item) => {
-      if (item.id === "tool-pending-001" && state.currentStep > 10) return "";
-      if (item.id === "tool-erp-write-running" && state.currentStep >= 19) return "";
-      if (item.id === "tool-erp-error" && state.currentStep >= 20) return "";
+      if (item.id === "tool-erp-write-running" || item.id === "tool-erp-error" || item.id === "tool-erp-write-success") return "";
       if (item.id === "tool-oa-destructive" && state.currentStep >= 22) return "";
       if (item.id === "tool-docx-generate-running" && state.currentStep >= 25) return "";
       if (item.id === "tool-local-delete-destructive" && state.currentStep >= 30) return "";
@@ -1789,6 +3021,8 @@
         return renderNarration(item);
       case "thinking":
         return renderThinking(item);
+      case "context_compression":
+        return renderContextCompression(item, step);
       case "skill_chip":
         return renderSkillChip(item);
       case "plan_card":
@@ -1846,6 +3080,25 @@
     </div>`;
   }
 
+  function renderContextCompression(item, step) {
+    const done = state.runtime[step.id] === "success" || state.currentStep > step.id;
+    const title = done ? item.completedTitle || "上下文压缩完成" : item.title || "上下文正在压缩";
+    const summary = done ? item.completedSummary || "" : item.summary || "";
+    return `<div class="message-row">
+      <article class="context-compression-card ${done ? "is-done" : "is-running"}">
+        <div class="context-compression-icon">${done ? icon("check") : '<span class="spinner"></span>'}</div>
+        <div class="context-compression-main">
+          <div class="context-compression-head">
+            <strong>${escapeHTML(title)}</strong>
+            <span class="status-pill ${done ? "success" : "info"}">${done ? icon("check") : '<span class="spinner"></span>'}<span>${done ? "完成" : "进行中"}</span></span>
+          </div>
+          ${summary ? `<div class="context-compression-summary">${escapeHTML(summary)}</div>` : ""}
+          ${done ? "" : `<div class="context-compression-progress" aria-hidden="true"><span></span></div>`}
+        </div>
+      </article>
+    </div>`;
+  }
+
   function formatJsonHighlighted(value, indent = 0) {
     const pad = (d) => "  ".repeat(d);
     if (value === null) return `<span class="json-lit">null</span>`;
@@ -1877,36 +3130,10 @@
   }
 
   function renderSkillChip(item) {
-    const req =
-      item.request && typeof item.request === "object"
-        ? item.request
-        : { skill: item.annotation?.schema?.skill_id || "skill" };
-    const resText =
-      typeof item.response === "string"
-        ? item.response
-        : item.response != null
-          ? formatJSON(item.response)
-          : `Launching skill: ${typeof req.skill === "string" ? req.skill : formatJSON(req)}`;
-
     return `<div class="message-row">
-      <article class="skill-call-card">
-        <details class="skill-call-details">
-          <summary class="skill-call-summary" aria-label="展开或收起请求与响应">
-            <span class="skill-call-icon" aria-hidden="true">${icon("skill")}</span>
-            <span class="skill-call-title">技能：${escapeHTML(item.skill)}</span>
-            <span class="skill-call-summary-chev" aria-hidden="true">${icon("chevron")}</span>
-          </summary>
-          <div class="skill-call-panel">
-            <div class="skill-call-block">
-              <div class="skill-call-block-label">Request</div>
-              <pre class="skill-call-pre skill-call-pre--json">${formatJsonHighlighted(req)}</pre>
-            </div>
-            <div class="skill-call-block">
-              <div class="skill-call-block-label">Response</div>
-              <pre class="skill-call-pre skill-call-pre--plain">${escapeHTML(resText)}</pre>
-            </div>
-          </div>
-        </details>
+      <article class="skill-chip-card" aria-label="技能调用：${escapeAttr(item.skill)}">
+        <span class="skill-chip-icon" aria-hidden="true">${icon("skill-call")}</span>
+        <strong class="skill-chip-title">技能：${escapeHTML(item.skill)}</strong>
       </article>
     </div>`;
   }
@@ -1966,6 +3193,13 @@
 
   function renderToolCall(item, step) {
     const status = normalizedToolStatus(item, step);
+    if (isInlineFileTool(item)) {
+      return renderFileToolCall(item, status);
+    }
+    if (isCommandTool(item)) {
+      return renderCommandToolCall(item, status);
+    }
+
     const cssStatus = toolCssStatus(status);
     const body = renderToolBody(item, status);
     const title =
@@ -1975,106 +3209,84 @@
 
     const panelBody = body.trim()
       ? body
-      : `<div class="tool-summary">暂无请求 / 响应记录。</div>`;
+      : `<div class="tool-summary">暂无工具调用详情。</div>`;
     const openAttr = toolCallDetailsOpenByDefault(status) ? " open" : "";
 
     return `<div class="message-row">
-      <details class="tool-call tool-call-details category-${escapeHTML(item.category || "file")} ${cssStatus}"${openAttr}>
-        <summary class="tool-call-head" aria-label="展开或收起请求与响应">
-          <div class="tool-call-icon">${toolIcon(item)}</div>
-          <div class="tool-call-title">
-            <strong>${escapeHTML(title)}</strong>
-          </div>
-          <span class="tool-call-toggle" aria-hidden="true">${icon("chevron")}</span>
-          ${renderStatusBadge(status)}
-          <span class="tool-call-elapsed">${escapeHTML(item.elapsed || "")}</span>
-        </summary>
-        <div class="tool-call-io">
-          <div class="skill-call-panel tool-call-io-panel">${panelBody}</div>
-        </div>
-      </details>
+      ${renderToolStatePanel({
+        title,
+        status,
+        iconName: toolIconName(item),
+        body: panelBody,
+        mode: "request",
+        collapsible: true,
+        open: Boolean(openAttr),
+        elapsed: toolElapsedText(item, status),
+        extraClass: `category-${item.category || "file"} ${cssStatus}`
+      })}
+    </div>`;
+  }
+
+  function isInlineFileTool(item) {
+    return item.category === "file" || item.presentation === "local_file_create" || item.presentation === "local_file_delete";
+  }
+
+  function isCommandTool(item) {
+    return item.category === "shell" || item.category === "code";
+  }
+
+  function renderCommandToolCall(item, status) {
+    const cssStatus = toolCssStatus(status);
+    const body = renderCommandToolBody(item, status);
+    const confirmation = renderCommandHitlBody(item, status);
+    const panelBody = [body.trim() ? body : renderToolStateCommandBlock("shell", `$ ${commandInvocationLabel(item)}`), confirmation]
+      .filter(Boolean)
+      .join("");
+    return `<div class="message-row">
+      ${renderToolStatePanel({
+        title: commandToolTitle(item),
+        status,
+        iconName: toolIconName(item),
+        body: panelBody,
+        mode: "command",
+        collapsible: true,
+        open: true,
+        elapsed: toolElapsedText(item, status),
+        extraClass: `category-${item.category || "shell"} ${cssStatus}`
+      })}
+    </div>`;
+  }
+
+  function renderFileToolCall(item, status) {
+    const cssStatus = toolCssStatus(status);
+    const title = fileToolTitle(item);
+    const body = renderToolBody(item, status);
+    return `<div class="message-row">
+      ${renderToolStatePanel({
+        title,
+        status,
+        iconName: toolIconName(item),
+        body,
+        mode: "request",
+        collapsible: true,
+        open: toolCallDetailsOpenByDefault(status),
+        elapsed: toolElapsedText(item, status),
+        extraClass: `category-file ${cssStatus}`
+      })}
     </div>`;
   }
 
   function renderToolBody(item, status) {
-    if (item.presentation === "local_file_create") {
-      return renderLocalFileCreateBody(item, status);
-    }
-    if (item.presentation === "local_file_delete") {
-      return renderLocalFileDeleteBody(item, status);
-    }
-
-    if (status === "success_collapsed" || status === "success_expanded") {
-      return renderToolRequestResponse(item.args, item.output);
-    }
-
-    if (status === "pending") {
-      const hasArgs = item.args && typeof item.args === "object" && Object.keys(item.args).length > 0;
-      if (hasArgs) return renderToolRequestResponse(item.args, item.output ?? null);
-      return `<div class="tool-summary">排队中,尚未开始执行。</div>`;
-    }
-
-    if (status === "running") {
-      return `<div class="stream-box">
-        ${(item.stream || []).map((line) => `<div class="stream-line">${escapeHTML(line)}</div>`).join("")}
-        <div class="skeleton"></div>
-        <div class="skeleton" style="width: 82%"></div>
-        <div class="skeleton" style="width: 64%"></div>
-      </div>`;
-    }
-
     if (status === "needs_approval") {
-      const permissionFeedback = item.feedbackMessages || {
-        "deny-permission": "已拒绝连接器授权,当前流程暂停。"
-      };
-      return `<div class="tool-summary">${escapeHTML(item.summary)}</div>
-        ${renderToolRequestResponse(item.args, null)}
-        ${getHitlFeedback("permission", permissionFeedback)}
-        <div class="hitl-actions tool-call-hitl-actions">
-          <button class="primary-button" type="button" data-hitl-action="allow-once">允许一次</button>
-          <button class="secondary-button" type="button" data-hitl-action="always-allow">本会话始终允许</button>
-          <button class="danger-button" type="button" data-hitl-action="deny-permission">拒绝</button>
-        </div>`;
+      return renderPermissionToolBody(item);
     }
 
     if (status === "destructive") {
-      const feedbackMessages = {
-        "edit-destructive": "已暂停提交,可返回 ERP 草稿调整后再确认。",
-        "cancel-destructive": "已取消本次提交确认,草稿仍保留。",
-        ...(item.feedbackMessages || {})
-      };
-      return `<div class="tool-summary">${escapeHTML(item.summary)}</div>
-        <ul class="destructive-line-list">
-          ${(item.impact || []).map((line) => `<li>${escapeHTML(line)}</li>`).join("")}
-        </ul>
-        <div class="destructive-path-block">
-          ${(item.paths || []).map((path) => `<div class="destructive-path-line">${escapeHTML(path)}</div>`).join("")}
-        </div>
-        ${getHitlFeedback("destructive", feedbackMessages)}
-        <div class="hitl-actions tool-call-hitl-actions">
-          <button class="danger-button" type="button" data-hitl-action="confirm-destructive">${escapeHTML(item.confirmLabel || "确认提交")}</button>
-          ${item.showEdit === false ? "" : `<button class="secondary-button" type="button" data-hitl-action="edit-destructive">${escapeHTML(item.editLabel || "编辑")}</button>`}
-          <button class="ghost-button" type="button" data-hitl-action="cancel-destructive">${escapeHTML(item.cancelLabel || "取消")}</button>
-        </div>`;
+      return renderDestructiveToolBody(item);
     }
 
     if (status === "error") {
-      if (item.autoRetry) {
-        return `<div class="error-detail">
-            <strong>${escapeHTML(item.summary)}</strong>
-            <span>错误码: ${escapeHTML(item.output?.code || "UNKNOWN_ERROR")}</span>
-          </div>
-          <div class="tool-summary" style="margin-top: 10px">${escapeHTML(item.retryMessage || "系统已自动重试。")}</div>`;
-      }
-      return `<div class="error-detail">
-          <strong>${escapeHTML(item.summary)}</strong>
-          <span>错误码: ${escapeHTML(item.output?.code || "UNKNOWN_ERROR")}</span>
-        </div>
-        ${getHitlFeedback("retry", { skip: "已选择跳过失败步骤,建议仅用于非关键任务。" })}
-        <div class="hitl-actions tool-call-hitl-actions">
-          <button class="primary-button" type="button" data-hitl-action="retry">重试</button>
-          <button class="ghost-button" type="button" data-hitl-action="skip">跳过</button>
-        </div>`;
+      return renderErrorToolBody(item);
     }
 
     if (status === "cancelled") {
@@ -2102,21 +3314,299 @@
         </div>`;
     }
 
-    return "";
+    return renderTypedToolBody(item, status);
+  }
+
+  function toolElapsedText(item, status) {
+    if (isRequestResponseTool(item)) {
+      if (status === "needs_approval" && item.elapsed && !looksLikeElapsedDuration(item.elapsed)) return item.elapsed;
+      if (status === "destructive" && item.elapsed && !looksLikeElapsedDuration(item.elapsed)) return item.elapsed;
+      return "";
+    }
+    if (item.status === "needs_approval" && status !== "needs_approval" && item.elapsed === "等待授权") {
+      return "";
+    }
+    return item.elapsed || "";
+  }
+
+  function isRequestResponseTool(item) {
+    return ["connector", "doc", "web", "subagent"].includes(item.category);
+  }
+
+  function looksLikeElapsedDuration(value) {
+    const text = String(value || "").trim();
+    return /^\d+(?:\.\d+)?\s*(?:ms|s|秒)$/i.test(text) || /^\d{1,2}:\d{2}(?::\d{2})?$/.test(text);
+  }
+
+  function renderTypedToolBody(item, status) {
+    switch (item.category) {
+      case "connector":
+        return renderConnectorToolBody(item, status);
+      case "web":
+      case "doc":
+      case "subagent":
+        return renderGenericToolBody(item, status);
+      case "shell":
+        return renderShellToolBody(item, status);
+      case "code":
+        return renderCodeToolBody(item, status);
+      default:
+        return renderGenericToolBody(item, status);
+    }
+  }
+
+  function renderConnectorToolBody(item, status) {
+    const output = connectorOutputForStatus(item, status);
+    return `<div class="tool-type-body">
+      ${renderToolIoBlocks(item, output)}
+    </div>`;
+  }
+
+  function connectorOutputForStatus(item, status) {
+    if (status === "needs_approval") return null;
+    if (status === "denied") {
+      return item.deniedOutput || { code: 403, message: "用户拒绝授权,请求未执行。" };
+    }
+    return item.output;
+  }
+
+  function renderShellToolBody(item, status) {
+    const output = item.output && typeof item.output === "object" ? item.output : {};
+    const lines = [`$ ${commandInvocationLabel(item)}`];
+    if (output.stdout) lines.push(output.stdout);
+    if (output.stderr) lines.push(output.stderr);
+    return `<div class="tool-type-body">
+      ${renderToolStateCommandBlock("shell", lines.join("\n"))}
+      ${renderCommandMeta([
+        output.exit_code !== undefined ? `退出码 ${output.exit_code}` : "",
+        item.elapsed,
+        item.args?.cwd
+      ])}
+      ${status === "running" ? renderToolStream(item) : ""}
+    </div>`;
+  }
+
+  function renderCodeToolBody(item, status) {
+    const output = item.output && typeof item.output === "object" ? item.output : {};
+    const checks = Array.isArray(output.checks) ? output.checks : [];
+    const language = item.args?.language || "Code";
+    const resultLines = [];
+    if (output.result) resultLines.push(`Result: ${output.result}`);
+    if (output.total_amount) resultLines.push(`Total: ${output.total_amount}`);
+    if (output.diff) resultLines.push(`Diff: ${output.diff}`);
+    if (checks.length) resultLines.push(checks.map((line) => `- ${line}`).join("\n"));
+    const terminalLines = [
+      `$ ${commandInvocationLabel(item)}`,
+      item.args?.code ? item.args.code : "",
+      resultLines.length ? resultLines.join("\n") : ""
+    ].filter(Boolean);
+    return `<div class="tool-type-body">
+      ${renderToolStateCommandBlock(language, terminalLines.join("\n\n"))}
+      ${renderCommandMeta([language, checks.length ? `${checks.length} 项校验` : "", item.elapsed])}
+      ${status === "running" ? renderToolStream(item) : ""}
+    </div>`;
+  }
+
+  function renderGenericToolBody(item, status) {
+    return `<div class="tool-type-body">
+      ${renderToolIoBlocks(item)}
+    </div>`;
+  }
+
+  function commandToolTitle(item) {
+    return commandInvocationLabel(item);
+  }
+
+  function commandInvocationLabel(item) {
+    if (item.category === "code") {
+      return `Execute ${item.args?.language || "code"} code`;
+    }
+    return item.args?.command || item.headline || item.toolName || "Execute command";
+  }
+
+  function renderCommandToolBody(item, status) {
+    if (status === "error" && item.category !== "shell" && item.category !== "code") {
+      return renderErrorToolBody(item);
+    }
+    return item.category === "code" ? renderCodeToolBody(item, status) : renderShellToolBody(item, status);
+  }
+
+  function renderCommandHitlBody(item, status) {
+    if (status !== "destructive") return "";
+    const feedbackMessages = {
+      "edit-destructive": "已暂停执行,可调整命令或返回检查文件。",
+      "cancel-destructive": "已取消本次删除命令,文件会继续保留。",
+      ...(item.feedbackMessages || {})
+    };
+    return `<div class="tool-command-confirm">
+      <ul class="destructive-line-list">
+        ${(item.impact || []).map((line) => `<li>${escapeHTML(line)}</li>`).join("")}
+      </ul>
+      <div class="destructive-path-block">
+        ${(item.paths || []).map((path) => `<div class="destructive-path-line">${escapeHTML(path)}</div>`).join("")}
+      </div>
+      ${getHitlFeedback("destructive", feedbackMessages)}
+      <div class="hitl-actions tool-call-hitl-actions">
+        <button class="danger-button" type="button" data-hitl-action="confirm-destructive">${escapeHTML(item.confirmLabel || "确认执行")}</button>
+        ${item.showEdit === false ? "" : `<button class="secondary-button" type="button" data-hitl-action="edit-destructive">${escapeHTML(item.editLabel || "编辑")}</button>`}
+        <button class="ghost-button" type="button" data-hitl-action="cancel-destructive">${escapeHTML(item.cancelLabel || "取消")}</button>
+      </div>
+    </div>`;
+  }
+
+  function renderCommandMeta(parts) {
+    const rows = parts.filter(Boolean);
+    if (!rows.length) return "";
+    return `<div class="command-meta">${rows.map((part) => `<span>${escapeHTML(String(part))}</span>`).join("")}</div>`;
+  }
+
+  function fileToolTitle(item) {
+    const queuedFiles = Array.isArray(item.annotation?.schema?.args?.files) ? item.annotation.schema.args.files : [];
+    const action = normalizeFileAction(item);
+    if (queuedFiles.length) return `${action} ${queuedFiles.length} 份附件`;
+
+    const fileName = fileToolName(item);
+    if (item.presentation === "local_file_create" || item.presentation === "local_file_delete") {
+      return `${action} ${fileName}`;
+    }
+    if (item.status === "destructive") {
+      return `${action} ${fileName}`;
+    }
+    if (item.action && fileName && fileName !== "会话工作区") {
+      return `${action} ${fileName}`;
+    }
+    return `${action} ${fileName}`.trim() || "文件操作";
+  }
+
+  function normalizeFileAction(item) {
+    const text = `${item.action || ""} ${item.toolName || ""} ${item.headline || ""}`.toLowerCase();
+    if (item.presentation === "local_file_create") return "创建";
+    if (item.presentation === "local_file_delete") return "删除";
+    if (text.includes("delete") || text.includes("删除")) return "删除";
+    if (text.includes("edit") || text.includes("write") || text.includes("编辑") || text.includes("修改")) return "编辑";
+    if (text.includes("create") || text.includes("generate") || text.includes("创建") || text.includes("生成")) return "创建";
+    if (text.includes("read") || text.includes("读取") || text.includes("查看")) return "读取";
+    return item.action || "文件";
+  }
+
+  function fileToolName(item) {
+    const pathName = Array.isArray(item.paths) && item.paths.length ? basename(item.paths[0]) : "";
+    const targetName = item.target && item.target !== "删除后不可恢复" ? item.target : "";
+    return (
+      item.output?.file_name ||
+      targetName ||
+      pathName ||
+      basename(item.args?.path || item.args?.file || "") ||
+      item.headline?.replace(/^(已完成|已删除|正在创建|创建|删除|读取)：?/, "") ||
+      "文件"
+    );
+  }
+
+  function basename(path) {
+    if (!path || typeof path !== "string") return "";
+    return path.split(/[\\/]/).filter(Boolean).pop() || path;
+  }
+
+  function renderFileInlineBody(item, status) {
+    if (status !== "destructive") return "";
+    const feedbackMessages = {
+      "edit-destructive": "已暂停提交,可返回 ERP 草稿调整后再确认。",
+      "cancel-destructive": "已取消本次提交确认,草稿仍保留。",
+      ...(item.feedbackMessages || {})
+    };
+    return `<div class="tool-file-confirm">
+      <ul class="destructive-line-list">
+        ${(item.impact || []).map((line) => `<li>${escapeHTML(line)}</li>`).join("")}
+      </ul>
+      <div class="destructive-path-block">
+        ${(item.paths || []).map((path) => `<div class="destructive-path-line">${escapeHTML(path)}</div>`).join("")}
+      </div>
+      ${getHitlFeedback("destructive", feedbackMessages)}
+      <div class="hitl-actions tool-call-hitl-actions">
+        <button class="danger-button" type="button" data-hitl-action="confirm-destructive">${escapeHTML(item.confirmLabel || "确认提交")}</button>
+        ${item.showEdit === false ? "" : `<button class="secondary-button" type="button" data-hitl-action="edit-destructive">${escapeHTML(item.editLabel || "编辑")}</button>`}
+        <button class="ghost-button" type="button" data-hitl-action="cancel-destructive">${escapeHTML(item.cancelLabel || "取消")}</button>
+      </div>
+    </div>`;
+  }
+
+  function renderToolIoBlocks(item, output = item.output) {
+    const hasArgs = item.args && typeof item.args === "object" && Object.keys(item.args).length > 0;
+    const hasOutput = output !== null && output !== undefined;
+    if (!hasArgs && !hasOutput) return "";
+    return renderToolRequestResponse(hasArgs ? item.args : {}, output);
+  }
+
+  function renderPermissionToolBody(item) {
+    const permissionFeedback = item.feedbackMessages || {
+      "deny-permission": "已拒绝连接器授权,当前流程暂停。"
+    };
+    return `<div class="tool-type-body tool-type-approval">
+      ${renderConnectorToolBody(item, "needs_approval")}
+      ${getHitlFeedback("permission", permissionFeedback)}
+      <div class="hitl-actions tool-call-hitl-actions">
+        <button class="primary-button" type="button" data-hitl-action="allow-once">允许一次</button>
+        <button class="secondary-button" type="button" data-hitl-action="always-allow">本会话始终允许</button>
+        <button class="danger-button" type="button" data-hitl-action="deny-permission">拒绝</button>
+      </div>
+    </div>`;
+  }
+
+  function renderDestructiveToolBody(item) {
+    const feedbackMessages = {
+      "edit-destructive": "已暂停提交,可返回 ERP 草稿调整后再确认。",
+      "cancel-destructive": "已取消本次提交确认,草稿仍保留。",
+      ...(item.feedbackMessages || {})
+    };
+    return `<div class="tool-type-body tool-type-destructive">
+      ${renderToolLead(item)}
+      <ul class="destructive-line-list">
+        ${(item.impact || []).map((line) => `<li>${escapeHTML(line)}</li>`).join("")}
+      </ul>
+      <div class="destructive-path-block">
+        ${(item.paths || []).map((path) => `<div class="destructive-path-line">${escapeHTML(path)}</div>`).join("")}
+      </div>
+      ${renderToolIoBlocks(item, null)}
+      ${getHitlFeedback("destructive", feedbackMessages)}
+      <div class="hitl-actions tool-call-hitl-actions">
+        <button class="danger-button" type="button" data-hitl-action="confirm-destructive">${escapeHTML(item.confirmLabel || "确认提交")}</button>
+        ${item.showEdit === false ? "" : `<button class="secondary-button" type="button" data-hitl-action="edit-destructive">${escapeHTML(item.editLabel || "编辑")}</button>`}
+        <button class="ghost-button" type="button" data-hitl-action="cancel-destructive">${escapeHTML(item.cancelLabel || "取消")}</button>
+      </div>
+    </div>`;
+  }
+
+  function renderErrorToolBody(item) {
+    const retryControls = item.autoRetry
+      ? `<div class="tool-summary" style="margin-top: 10px">${escapeHTML(item.retryMessage || "系统已自动重试。")}</div>`
+      : `${getHitlFeedback("retry", { skip: "已选择跳过失败步骤,建议仅用于非关键任务。" })}
+        <div class="hitl-actions tool-call-hitl-actions">
+          <button class="primary-button" type="button" data-hitl-action="retry">重试</button>
+          <button class="ghost-button" type="button" data-hitl-action="skip">跳过</button>
+        </div>`;
+    return `<div class="tool-type-body tool-type-error">
+      <div class="error-detail">
+        <strong>${escapeHTML(item.summary)}</strong>
+        <span>错误码: ${escapeHTML(item.output?.code || "UNKNOWN_ERROR")}</span>
+      </div>
+      ${renderToolIoBlocks(item)}
+      ${retryControls}
+    </div>`;
   }
 
   function renderLocalFileCreateBody(item, status) {
-    const fileName = item.output?.file_name || item.target || item.headline?.replace(/^已完成：|^正在创建：/, "") || "文件";
+    const fileName = fileToolName(item);
     if (status === "running") {
       return `<div class="local-file-box">
-        <div class="local-file-line">${escapeHTML(item.headline || `正在创建：${fileName}`)}</div>
+        <div class="local-file-line">${escapeHTML(`创建 ${fileName}`)}</div>
         <div class="local-file-meta">${escapeHTML(item.summary || "")}</div>
+        ${renderToolStream(item)}
       </div>`;
     }
 
     if (status === "success_collapsed" || status === "success_expanded") {
       return `<div class="local-file-box">
-        <div class="local-file-line">${escapeHTML(item.headline || `已完成：${fileName}`)}</div>
+        <div class="local-file-line">${escapeHTML(`创建 ${fileName}`)}</div>
         <div class="local-file-meta">${escapeHTML(item.summary || "")}</div>
         ${item.output?.path ? `<div class="local-file-path">${escapeHTML(item.output.path)}</div>` : ""}
       </div>`;
@@ -2129,27 +3619,57 @@
   }
 
   function renderLocalFileDeleteBody(item, status) {
-    const fileName = item.output?.file_name || item.target || "文件";
+    const fileName = fileToolName(item);
     return `<div class="local-file-box">
-      <div class="local-file-line">${escapeHTML(item.headline || `已删除：${fileName}`)}</div>
+      <div class="local-file-line">${escapeHTML(`删除 ${fileName}`)}</div>
       <div class="local-file-meta">${escapeHTML(item.summary || "")}</div>
       ${item.output?.path ? `<div class="local-file-path">${escapeHTML(item.output.path)}</div>` : ""}
     </div>`;
   }
 
+  function renderToolLead(item, fallback = "") {
+    const text = item.summary || fallback;
+    return text ? `<div class="tool-summary">${escapeHTML(text)}</div>` : "";
+  }
+
+  function renderToolStream(item) {
+    const lines = Array.isArray(item.stream) ? item.stream : [];
+    return `<div class="stream-box">
+      ${lines.map((line) => `<div class="stream-line">${escapeHTML(line)}</div>`).join("")}
+      <div class="skeleton"></div>
+      <div class="skeleton" style="width: 82%"></div>
+      <div class="skeleton" style="width: 64%"></div>
+    </div>`;
+  }
+
+  function renderToolFactGrid(entries) {
+    const rows = entries.filter((entry) => entry[1] !== undefined && entry[1] !== null && entry[1] !== "");
+    if (!rows.length) return "";
+    return `<dl class="tool-fact-grid">
+      ${rows.map(([label, value]) => `<div><dt>${escapeHTML(label)}</dt><dd>${escapeHTML(String(value))}</dd></div>`).join("")}
+    </dl>`;
+  }
+
+  function renderToolPillList(items, label) {
+    if (!items.length) return "";
+    return `<div class="tool-pill-section">
+      <span>${escapeHTML(label)}</span>
+      <div>${items.map((item) => `<em>${escapeHTML(item)}</em>`).join("")}</div>
+    </div>`;
+  }
+
+  function renderToolRawDetails(item, output = item.output) {
+    const hasArgs = item.args && typeof item.args === "object" && Object.keys(item.args).length > 0;
+    const hasOutput = output !== null && output !== undefined;
+    if (!hasArgs && !hasOutput) return "";
+    return `<details class="tool-raw-details">
+      <summary>原始调用详情</summary>
+      <div class="skill-call-panel tool-call-raw-panel">${renderToolRequestResponse(hasArgs ? item.args : {}, output)}</div>
+    </details>`;
+  }
+
   function renderToolRequestResponse(args, output) {
-    const blocks = [];
-    blocks.push(`<div class="skill-call-block">
-      <div class="skill-call-block-label">Request</div>
-      <pre class="skill-call-pre skill-call-pre--json">${formatJsonHighlighted(args || {})}</pre>
-    </div>`);
-    if (output !== null && output !== undefined) {
-      blocks.push(`<div class="skill-call-block">
-        <div class="skill-call-block-label">Response</div>
-        <pre class="skill-call-pre skill-call-pre--json">${formatJsonHighlighted(output)}</pre>
-      </div>`);
-    }
-    return blocks.join("");
+    return renderToolStateIoBlocks(args, output);
   }
 
   function renderStatusBadge(status) {
@@ -2161,6 +3681,7 @@
       needs_approval: { label: "需要授权", cls: "warning", prefix: icon("warning") },
       destructive: { label: "需确认", cls: "danger", prefix: icon("warning") },
       error: { label: "失败", cls: "danger", prefix: icon("x") },
+      denied: { label: "已拒绝", cls: "danger", prefix: icon("x") },
       cancelled: { label: "已取消", cls: "", prefix: icon("x") },
       computer_use: { label: "桌面控制", cls: "warning", prefix: icon("mouse") }
     }[status] || { label: status, cls: "", prefix: "" };
@@ -2361,7 +3882,7 @@
     const scope = getRuntimeScopeKey();
     if (!text || !scope) return;
 
-    const mode = state.runtimeSend.mode === "steer" ? "steer" : "queue";
+    const mode = state.runtimeSend.mode === "parallel" ? "parallel" : "queue";
     const message = {
       id: createRuntimeMessageId(`runtime-${mode}`),
       scope,
@@ -2371,7 +3892,7 @@
       createdAt: Date.now()
     };
 
-    if (mode === "steer") {
+    if (mode === "parallel") {
       state.runtimeSend.steers.push(message);
     } else {
       state.runtimeSend.queue.push(message);
@@ -2453,8 +3974,8 @@
     if (action === "toggle-more") {
       state.runtimeSend.queueMenuId = state.runtimeSend.queueMenuId === id ? "" : id;
       renderRuntimeQueueDock();
-    } else if (action === "steer-from-queue") {
-      steerRuntimeQueueMessage(id);
+    } else if (action === "parallel-from-queue") {
+      parallelizeRuntimeQueueMessage(id);
     } else if (action === "edit") {
       beginRuntimeQueueEdit(id);
     } else if (action === "save-edit") {
@@ -2514,13 +4035,13 @@
     render();
   }
 
-  function steerRuntimeQueueMessage(id) {
+  function parallelizeRuntimeQueueMessage(id) {
     const index = state.runtimeSend.queue.findIndex((item) => item.id === id);
     if (index < 0) return;
     const [message] = state.runtimeSend.queue.splice(index, 1);
     state.runtimeSend.steers.push({
       ...message,
-      id: createRuntimeMessageId("runtime-steer"),
+      id: createRuntimeMessageId("runtime-parallel"),
       anchor: getRuntimeAnchor(),
       createdLabel: getRuntimeAnchorLabel(),
       createdAt: Date.now()
@@ -2575,11 +4096,11 @@
         <article class="runtime-steer-message">
           <div class="runtime-steer-meta">
             <span class="runtime-steer-arrow">↳</span>
-            <span>运行中插入</span>
+            <span>并行</span>
             <span class="runtime-steer-status ${escapeAttr(status.className)}">${escapeHTML(status.label)}</span>
           </div>
           <div class="runtime-steer-text">${escapeHTML(message.text)}</div>
-          <div class="runtime-steer-note">不重置当前任务,保持 Agent 上下文与执行状态连续。</div>
+          <div class="runtime-steer-note">与主任务并行执行,保持 Agent 上下文与执行状态连续。</div>
         </article>
       </div>`;
     }).join("");
@@ -2629,8 +4150,7 @@
         ${editing
           ? `<button class="runtime-queue-action primary" type="button" data-runtime-action="save-edit" data-runtime-message-id="${escapeAttr(message.id)}">保存</button>
             <button class="runtime-queue-action" type="button" data-runtime-action="cancel-edit">取消</button>`
-          : `<button class="runtime-queue-action steer" type="button" data-runtime-action="steer-from-queue" data-runtime-message-id="${escapeAttr(message.id)}">↳ 引导</button>
-            <button class="runtime-queue-icon-action" type="button" aria-label="删除待执行消息" title="删除" data-runtime-action="delete" data-runtime-message-id="${escapeAttr(message.id)}">${icon("trash")}</button>
+          : `<button class="runtime-queue-icon-action" type="button" aria-label="删除待执行消息" title="删除" data-runtime-action="delete" data-runtime-message-id="${escapeAttr(message.id)}">${icon("trash")}</button>
             <button class="runtime-queue-icon-action" type="button" aria-label="更多操作" title="更多" aria-expanded="${menuOpen ? "true" : "false"}" data-runtime-action="toggle-more" data-runtime-message-id="${escapeAttr(message.id)}">${icon("more")}</button>
             ${menuOpen ? `<div class="runtime-queue-more-menu">
               <button type="button" data-runtime-action="edit" data-runtime-message-id="${escapeAttr(message.id)}">编辑</button>
@@ -2641,14 +4161,20 @@
     </article>`;
   }
 
+  function setEnterpriseOverviewPlanReady(planReady) {
+    if (nodes.enterpriseOverviewIdle) nodes.enterpriseOverviewIdle.hidden = planReady;
+    if (nodes.enterpriseOverviewPanels) nodes.enterpriseOverviewPanels.hidden = !planReady;
+  }
+
   function renderRightPanel() {
-    if (state.route === "agents" || state.route === "automation") return;
+    if (isStandaloneRoute()) return;
     if (state.chatMode === "enterprise_draft" || state.chatMode === "enterprise_session") {
       renderEnterpriseRightPanel();
       syncRightPanelChrome(null);
       renderPreviewPlaceholder("企业级智能体产物会在这里预览。");
       return;
     }
+    setEnterpriseOverviewPlanReady(true);
     const files = getExpensePanelFiles();
     const selectedFile = ensureSelectedPreviewFile(files, state.panel.activeTab === "preview");
     if (state.panel.activeTab === "preview" && !selectedFile) {
@@ -2665,13 +4191,19 @@
   }
 
   function renderEnterpriseRightPanel() {
-    const progress = getCurrentTaskProgress();
-    renderRightPanelProgress(progress);
-
     const session = state.chatMode === "enterprise_session" ? getEnterpriseSession(state.enterprise.activeSessionId) : null;
     const agent = state.chatMode === "enterprise_session" ? getEnterpriseAgentById(session?.agentId) : getEnterpriseDraftAgent();
     const preset = getEnterprisePreset(agent);
     const phase = session?.phase || 0;
+    const planReady = phase >= 2;
+    setEnterpriseOverviewPlanReady(planReady);
+    if (planReady) {
+      renderRightPanelProgress(getCurrentTaskProgress());
+    } else {
+      nodes.progressCount.textContent = "";
+      nodes.progressList.innerHTML = "";
+    }
+
     const files = phase >= 5 ? preset.artifacts : [];
     nodes.fileCount.textContent = String(files.length);
     nodes.fileList.innerHTML = files.length
@@ -2703,10 +4235,14 @@
             (item) => `<div class="context-item">${icon(item.icon)}<div><strong>${escapeHTML(item.name)}</strong><span>${escapeHTML(item.meta)}</span></div></div>`
           )
           .join("")
-      : `<div class="panel-empty">暂无工具</div>`;
+      : `<div class="panel-empty">暂无工具调用</div>`;
   }
 
   function renderProgressPanel() {
+    if (!isTaskProgressReady()) {
+      renderEmptyProgressPanel();
+      return;
+    }
     renderRightPanelProgress(getCurrentTaskProgress());
   }
 
@@ -2715,6 +4251,20 @@
       return getEnterpriseTaskProgress();
     }
     return getDefaultTaskProgress();
+  }
+
+  function isTaskProgressReady() {
+    if (state.chatMode === "enterprise_session") {
+      const session = getEnterpriseSession(state.enterprise.activeSessionId);
+      return Boolean(session && session.phase >= 2);
+    }
+    if (state.chatMode === "enterprise_draft") return false;
+    return state.currentStep >= 9;
+  }
+
+  function renderEmptyProgressPanel() {
+    nodes.progressCount.textContent = "";
+    nodes.progressList.innerHTML = `<div class="panel-empty">暂无任务进程</div>`;
   }
 
   function shouldShowComposerProgressDock() {
@@ -2898,27 +4448,37 @@
 
   function renderContextPanel() {
     const contexts = [];
-    const draftCreated = state.currentStep > 15 || state.runtime[15] === "success";
-    if (state.currentStep >= 8) contexts.push({ icon: "skill", name: "技能: 差旅报销", meta: "已载入" });
-    if (state.currentStep >= 11) contexts.push({ icon: "file", name: "File Read", meta: "机票行程单字段" });
-    if (state.currentStep >= 12) contexts.push({ icon: "doc", name: "OCR 识别", meta: "酒店与打车票据" });
+    if (state.currentStep >= 8) contexts.push({ icon: "skill", name: "技能：差旅报销", meta: "" });
+    if (state.currentStep >= 11) contexts.push({ icon: "tool", name: "文档解析", meta: "上海机票行程单.pdf" });
+    if (state.currentStep >= 12) contexts.push({ icon: "tool", name: "图像理解", meta: "酒店与打车发票" });
     if (state.currentStep >= 15) {
-      contexts.push({ icon: "globe", name: "ERP 连接器", meta: draftCreated ? "草稿创建完成" : "正在创建草稿" });
+      contexts.push({ icon: "file", name: "创建 BX-DRAFT-7781.md", meta: "" });
     }
     if (state.currentStep >= 17) contexts.push({ icon: "globe", name: "ERP 写入授权", meta: "等待或完成授权" });
     if (state.currentStep >= 22) contexts.push({ icon: "globe", name: "OA 审批", meta: "提交成功" });
     if (state.currentStep >= 24)
       contexts.push({ icon: "doc", name: "本地文档生成", meta: state.currentStep >= 32 ? "草稿已删除" : "差旅申请草稿.docx" });
+    if (state.currentStep >= 33) {
+      contexts.push({ icon: "globe", name: "浏览器检查", meta: "OA 审批页状态" });
+      contexts.push({ icon: "terminal", name: "命令行检查", meta: "归档目录" });
+      contexts.push({ icon: "code", name: "代码复核", meta: "金额与附件一致性" });
+      contexts.push({ icon: "branch", name: "审计子代理", meta: "最终归档检查" });
+    }
 
     nodes.contextCount.textContent = String(contexts.length);
     nodes.contextList.innerHTML = contexts.length
-      ? contexts.map((item) => `<div class="context-item">${icon(item.icon)}<div><strong>${escapeHTML(item.name)}</strong><span>${escapeHTML(item.meta)}</span></div></div>`).join("")
-      : `<div class="panel-empty">暂无工具</div>`;
+      ? contexts
+          .map(
+            (item) =>
+              `<div class="context-item">${icon(item.icon)}<div><strong>${escapeHTML(item.name)}</strong>${item.meta ? `<span>${escapeHTML(item.meta)}</span>` : ""}</div></div>`
+          )
+          .join("")
+      : `<div class="panel-empty">暂无工具调用</div>`;
   }
 
   function renderPreviewPanel(files = getExpensePanelFiles(), selectedFile = ensureSelectedPreviewFile(files, true)) {
     if (!selectedFile) {
-      renderPreviewPlaceholder("选择右侧任务文件后，这里会展示 Markdown、PDF、网页和 Office 预览。");
+      renderPreviewPlaceholder("选择右侧会话文件后，这里会展示 Markdown、PDF、网页和 Office 预览。");
       return;
     }
 
@@ -2993,7 +4553,7 @@
 
   /** 用户已发起消息后，直至 Agent 跑完整条流程（差旅 demo 或未结束的企业会话）。 */
   function isAgentTaskExecutionWindow() {
-    if (state.route === "agents" || state.route === "automation") return false;
+    if (isStandaloneRoute()) return false;
     if (state.chatMode === "enterprise_draft") return false;
 
     if (state.chatMode === "enterprise_session") {
@@ -3023,7 +4583,7 @@
   }
 
   function shouldShowComposerPauseButton() {
-    if (state.route === "agents" || state.route === "automation") return false;
+    if (isStandaloneRoute()) return false;
     if (canShowRuntimeSendControls() && getComposerDraftText()) return false;
 
     if (state.chatMode === "enterprise_session") {
@@ -3041,7 +4601,7 @@
   }
 
   function pauseComposerWorkflow() {
-    if (state.route === "agents" || state.route === "automation") return;
+    if (isStandaloneRoute()) return;
 
     if (state.chatMode === "enterprise_session") {
       const session = getEnterpriseSession(state.enterprise.activeSessionId);
@@ -3081,7 +4641,7 @@
       title = "暂停";
       ariaLabel = "暂停任务";
     } else if (runtimeSubmit) {
-      title = state.runtimeSend.mode === "steer" ? "引导发送" : "加入队列";
+      title = state.runtimeSend.mode === "parallel" ? "并行发送" : "加入队列";
       ariaLabel = title;
     } else if (enterpriseResume) {
       title = "继续执行任务";
@@ -3090,7 +4650,7 @@
       title = "继续执行";
       ariaLabel = "继续执行任务流";
     } else if (disable && canShowRuntimeSendControls()) {
-      title = "输入新消息后可加入队列或引导发送";
+      title = "输入新消息后可加入队列或并行发送";
       ariaLabel = "输入新消息后发送";
     } else if (disable) {
       title = "任务执行中，完成后可发送新消息";
@@ -3109,9 +4669,9 @@
       state.runtimeSend.menuOpen = false;
     }
 
-    const mode = state.runtimeSend.mode === "steer" ? "steer" : "queue";
+    const mode = state.runtimeSend.mode === "parallel" ? "parallel" : "queue";
     if (nodes.sendModeLabel) {
-      nodes.sendModeLabel.textContent = mode === "steer" ? "引导发送" : "加入队列";
+      nodes.sendModeLabel.textContent = mode === "parallel" ? "并行发送" : "加入队列";
     }
     if (nodes.sendModeButton) {
       nodes.sendModeButton.setAttribute("aria-expanded", visible && state.runtimeSend.menuOpen ? "true" : "false");
@@ -3166,15 +4726,6 @@
         severity: "danger",
         triggerStep: 19,
         text: "连接不稳,已暂停 · 重试"
-      });
-    }
-    if (step >= 26) {
-      notices.push({
-        id: "usage-limit",
-        label: "NOTICE[quota]",
-        severity: "danger",
-        triggerStep: 26,
-        text: "本月用量接近上限 · 升级"
       });
     }
     return notices;
@@ -3458,6 +5009,10 @@
   }
 
   function normalizedToolStatus(item, step) {
+    if (item.status === "needs_approval" && step?.hitl === "permission") {
+      if (isPermissionAllowed(state.hitl.permission)) return "success_expanded";
+      if (isPermissionDenied(state.hitl.permission)) return "denied";
+    }
     if (item.status !== "running_to_success") return item.status;
     if (state.currentStep > step.id || state.runtime[step.id] === "success") return "success_expanded";
     return "running";
@@ -3465,6 +5020,7 @@
 
   function toolCssStatus(status) {
     if (status === "success_collapsed" || status === "success_expanded") return "success";
+    if (status === "denied") return "error";
     return status;
   }
 
@@ -3475,9 +5031,12 @@
   }
 
   function toolIcon(item) {
-    if (item.category === "connector") {
-      const label = item.connector || "MCP";
-      return `<span>${escapeHTML(label.slice(0, 3))}</span>`;
+    return icon(toolIconName(item));
+  }
+
+  function toolIconName(item) {
+    if (["connector", "doc", "web", "subagent"].includes(item.category)) {
+      return "tool";
     }
     const map = {
       shell: "terminal",
@@ -3488,7 +5047,7 @@
       subagent: "branch",
       computer: "mouse"
     };
-    return icon(map[item.category] || "file");
+    return map[item.category] || "file";
   }
 
   function icon(name) {
@@ -3646,7 +5205,7 @@
 
   function scrollStreamToBottom() {
     window.requestAnimationFrame(() => {
-      if (state.route === "agents" || state.route === "automation") {
+      if (isStandaloneRoute()) {
         nodes.stream.scrollTop = 0;
         return;
       }

@@ -10,7 +10,8 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-30 08:42",
     last_run_status: "success",
     enabled: true,
-    agent_id: "agent-language-coach",
+    agent_id: "claw-mine-general",
+    claw_id: "claw-mine-general",
     instruction:
       "每天早上推荐 5 个实用英语单词；每个单词输出音标、词性、中文释义和一个不超过 12 个词的英文例句，整体保持简洁、易记、适合晨读。",
     schedule_config: {
@@ -69,7 +70,8 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-30 08:00",
     last_run_status: "success",
     enabled: true,
-    agent_id: "agent-morning-boost",
+    agent_id: "claw-mine-general",
+    claw_id: "claw-mine-general",
     instruction:
       "每天早上生成一句不超过 30 字的中文鼓励语，再补一句当天可执行的小提醒，整体要温和、有力量，不要鸡汤式空话。",
     schedule_config: {
@@ -107,7 +109,8 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-13 12:00",
     last_run_status: "running",
     enabled: true,
-    agent_id: "agent-ops-sync",
+    agent_id: "claw-mine-general",
+    claw_id: "claw-mine-general",
     instruction:
       "对比 ERP 与电商平台 SKU 库存，识别差值超过 5 的商品，输出差异表并推送给运营值班群。",
     schedule_config: {

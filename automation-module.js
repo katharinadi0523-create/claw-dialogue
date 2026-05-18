@@ -24,6 +24,36 @@
 
   const PAGE_SIZE = 10;
 
+  const CLAW_SELECT_GROUPS = [
+    {
+      label: "我的 Claw",
+      items: [{ id: "claw-mine-general", label: "我的 Claw" }]
+    },
+    {
+      label: "AF 平台已发布",
+      items: [
+        { id: "claw-af-prd-writer", label: "PRD 写手" },
+        { id: "claw-af-cloud-factory", label: "云码工厂维护专员" },
+        { id: "claw-af-market", label: "市场洞察" },
+        { id: "claw-af-frontend", label: "前端原型实现" }
+      ]
+    }
+  ];
+
+  const CLAW_HINT =
+    "选择执行该任务的Claw智能体，支持选择我的Claw或者AF平台已发布的Claw。";
+
+  /** 列表展示：旧示例数据里的 agent_id 友好名（不在下拉选项中时）。 */
+  const LEGACY_AGENT_LABELS = {
+    "agent-language-coach": "语言教练",
+    "agent-morning-boost": "晨间鼓励助手",
+    "agent-ops-sync": "库存同步助手",
+    "agent-board-pack": "经营周报助手",
+    "agent-ci-diagnosis": "CI 诊断助手",
+    "agent-api-watch": "接口监测助手",
+    "agent-general": "通用 Agent"
+  };
+
   const state = {
     tasks: [],
     query: "",
@@ -105,7 +135,8 @@
       last_run_at: "",
       last_run_status: "never",
       enabled: true,
-      agent_id: "agent-general",
+      agent_id: "claw-mine-general",
+      claw_id: "claw-mine-general",
       instruction: "",
       schedule_config: {
         execution_type: "schedule",
@@ -134,7 +165,8 @@
       last_run_at: "",
       last_run_status: "never",
       enabled: true,
-      agent_id: "agent-general",
+      agent_id: "claw-mine-general",
+      claw_id: "claw-mine-general",
       instruction: "",
       event_config: {
         source_type: "webhook",
@@ -174,6 +206,11 @@
 
   function mergeSavedTask(draft, mode) {
     const nextTask = clone(draft);
+    const claw = (nextTask.claw_id || nextTask.agent_id || "").trim();
+    if (claw) {
+      nextTask.agent_id = claw;
+      nextTask.claw_id = claw;
+    }
     if (nextTask.trigger_type === "time") {
       nextTask.trigger_mode = nextTask.schedule_config?.execution_type || "schedule";
     } else {
@@ -257,11 +294,18 @@
     state.modal = {
       kind: task.trigger_type === "time" ? "scheduled" : "event",
       mode: "edit",
-      draft: clone(task),
+      draft: normalizeEditDraft(clone(task)),
       errors: {},
       advancedOpen: false
     };
     render();
+  }
+
+  function normalizeEditDraft(draft) {
+    const resolved = String(draft.claw_id || draft.agent_id || "claw-mine-general").trim();
+    draft.claw_id = resolved;
+    draft.agent_id = resolved;
+    return draft;
   }
 
   function setMessage(message) {
@@ -280,6 +324,7 @@
     const errors = {};
     if (!draft.name.trim()) errors.name = "请输入任务名称";
     if (!draft.instruction.trim()) errors.instruction = "请输入任务执行提示词";
+    if (!draft.claw_id || !String(draft.claw_id).trim()) errors.claw_id = "请选择 Claw 智能体";
     if (schedule.execution_type === "schedule") {
       if (!schedule.time) errors.scheduleTime = "请选择执行时间";
       if (schedule.frequency === "weekly" && (!Array.isArray(schedule.weekdays) || schedule.weekdays.length === 0)) {
@@ -315,6 +360,7 @@
     const errors = {};
     if (!draft.name.trim()) errors.name = "请输入任务名称";
     if (!draft.instruction.trim()) errors.instruction = "请输入任务执行提示词";
+    if (!draft.claw_id || !String(draft.claw_id).trim()) errors.claw_id = "请选择 Claw 智能体";
     if (webhook) {
       if (!config.source_name.trim()) errors.sourceName = "请输入来源名称";
     } else {
@@ -513,6 +559,9 @@
     const scope = input.getAttribute("data-modal-scope") || "root";
     if (scope === "root") {
       state.modal.draft[field] = input.type === "checkbox" ? input.checked : input.value;
+      if (field === "claw_id") {
+        state.modal.draft.agent_id = state.modal.draft.claw_id;
+      }
     } else if (scope === "schedule") {
       state.modal.draft.schedule_config[field] = input.value;
     } else if (scope === "event") {
@@ -526,12 +575,8 @@
     if (!state.root) return;
     const { filtered, totalPages, pageItems } = getPagedTasks();
     state.root.innerHTML = `
-      <section class="automation-page">
+      <section class="automation-page" aria-labelledby="sessionTitle">
         <header class="automation-head">
-          <div>
-            <h2>自动化任务</h2>
-            <p>管理 Agent 的定时执行任务和外部事件触发任务</p>
-          </div>
           <div class="automation-toolbar">
             <label class="automation-search">
               <input type="search" placeholder="按任务名称搜索" value="${escapeHTML(state.query)}" data-automation-field />
@@ -549,6 +594,7 @@
         <section class="automation-table-shell">
           <div class="automation-table-head">
             <div>任务</div>
+            <div>执行Claw</div>
             <div>触发方式</div>
             <div>上次执行时间</div>
             <div>最近结果</div>
@@ -580,12 +626,14 @@
 
   function renderTaskRow(task) {
     const meta = RESULT_META[task.last_run_status] || RESULT_META.never;
+    const clawLabel = getExecutionClawLabel(task);
     return `
       <article class="automation-task-row">
         <div class="automation-task-main">
           <div class="automation-task-title">${escapeHTML(task.name)}</div>
           <div class="automation-task-desc">${escapeHTML(task.description || "—")}</div>
         </div>
+        <div class="automation-task-claw" title="${escapeHTML(clawLabel)}">${escapeHTML(clawLabel)}</div>
         <div class="automation-task-trigger">
           <div>${escapeHTML(task.trigger_summary)}</div>
           <span class="automation-trigger-badge ${escapeHTML(task.trigger_mode)}">${escapeHTML(task.trigger_type === "time" ? (task.trigger_mode === "interval" ? "间隔执行" : task.trigger_mode === "once" ? "单次执行" : "定时执行") : task.trigger_mode === "poll" ? "Poll 检查" : "Webhook 触发")}</span>
@@ -647,7 +695,13 @@
             <button type="button" class="automation-close-button" data-automation-action="close-modal" aria-label="关闭弹窗">×</button>
           </div>
           <div class="automation-modal-body">
-            ${renderBaseFields(draft, errors, "例如：每日销售简报", "例如：读取昨日日报数据，生成晨会摘要并发送给销售负责人")}
+            ${renderBaseFields(
+              draft,
+              errors,
+              "例如：每日销售简报",
+              "例如：读取昨日日报数据，生成晨会摘要并发送给销售负责人",
+              { showClawSelect: true }
+            )}
             ${renderScheduleConfig(schedule, errors)}
             ${modal.mode === "edit" ? renderExecutionSection(draft.recent_runs || []) : ""}
           </div>
@@ -677,7 +731,13 @@
             <button type="button" class="automation-close-button" data-automation-action="close-modal" aria-label="关闭弹窗">×</button>
           </div>
           <div class="automation-modal-body">
-            ${renderBaseFields(draft, errors, "例如：构建失败自动诊断", "例如：读取构建失败日志，提取错误原因并通知项目负责人")}
+            ${renderBaseFields(
+              draft,
+              errors,
+              "例如：构建失败自动诊断",
+              "例如：读取构建失败日志，提取错误原因并通知项目负责人",
+              { showClawSelect: true }
+            )}
             <section class="automation-section">
               <div class="automation-section-copy">
                 <h4>事件来源配置</h4>
@@ -700,13 +760,71 @@
     `;
   }
 
-  function renderBaseFields(draft, errors, namePlaceholder, instructionPlaceholder) {
+  function getExecutionClawLabel(task) {
+    const id = String(task.claw_id || task.agent_id || "").trim();
+    if (!id) return "—";
+    for (let g = 0; g < CLAW_SELECT_GROUPS.length; g += 1) {
+      const found = CLAW_SELECT_GROUPS[g].items.find((item) => item.id === id);
+      if (found) return found.label;
+    }
+    if (LEGACY_AGENT_LABELS[id]) return LEGACY_AGENT_LABELS[id];
+    return id;
+  }
+
+  function collectKnownClawIds() {
+    const ids = new Set();
+    CLAW_SELECT_GROUPS.forEach((group) => {
+      group.items.forEach((item) => ids.add(item.id));
+    });
+    return ids;
+  }
+
+  function buildClawSelectOptions(selectedRaw) {
+    const selected = String(selectedRaw || "").trim();
+    const known = collectKnownClawIds();
+    const body = CLAW_SELECT_GROUPS.map((group) => {
+      const opts = group.items
+        .map(
+          (item) =>
+            `<option value="${escapeHTML(item.id)}" ${selected === item.id ? "selected" : ""}>${escapeHTML(item.label)}</option>`
+        )
+        .join("");
+      return `<optgroup label="${escapeHTML(group.label)}">${opts}</optgroup>`;
+    }).join("");
+    if (selected && !known.has(selected)) {
+      return `${body}<option value="${escapeHTML(selected)}" selected>${escapeHTML(selected)}（当前绑定）</option>`;
+    }
+    return body;
+  }
+
+  function renderClawField(draft, errors) {
+    const selected = draft.claw_id || draft.agent_id;
+    const hintEsc = escapeHTML(CLAW_HINT);
+    return `
+      <div class="automation-field">
+        <div class="automation-label automation-label-with-hint">
+          <span class="automation-label-text">选择Claw</span>
+          <span class="required">*</span>
+          <span class="automation-field-hint" role="img" tabindex="0" title="${hintEsc}" aria-label="${hintEsc}">?</span>
+        </div>
+        <select class="automation-select" data-modal-field="claw_id">${buildClawSelectOptions(selected)}</select>
+        ${errors.claw_id ? `<div class="automation-error">${escapeHTML(errors.claw_id)}</div>` : ""}
+      </div>
+    `;
+  }
+
+  function renderBaseFields(draft, errors, namePlaceholder, instructionPlaceholder, baseOptions = {}) {
+    const showClaw = baseOptions.showClawSelect === true;
+    const sectionDesc = showClaw
+      ? "选择执行任务的 Claw 智能体，并填写任务名称与执行提示词。"
+      : "描述任务名称、用途和 Agent 任务执行提示词。";
     return `
       <section class="automation-section">
         <div class="automation-section-copy">
           <h4>基础信息</h4>
-          <p>描述任务名称、用途和 Agent 任务执行提示词。</p>
+          <p>${sectionDesc}</p>
         </div>
+        ${showClaw ? renderClawField(draft, errors) : ""}
         ${renderField("任务名称", `<input value="${escapeHTML(draft.name)}" placeholder="${escapeHTML(namePlaceholder)}" data-modal-field="name" />`, errors.name, true)}
         ${renderField("任务描述", `<textarea data-modal-field="description" rows="4" placeholder="补充任务概述、任务背景、产出说明等，用于识别自动化任务">${escapeHTML(draft.description)}</textarea>`)}
         ${renderField("任务执行提示词", `<textarea data-modal-field="instruction" rows="7" placeholder="${escapeHTML(instructionPlaceholder)}">${escapeHTML(draft.instruction)}</textarea>`, errors.instruction, true)}
