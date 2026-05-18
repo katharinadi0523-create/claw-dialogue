@@ -1631,6 +1631,19 @@ svg {
   letter-spacing: 0;
 }
 
+.tool-state-block-label--with-spinner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.product-doc-response-spinner.spinner {
+  width: 11px;
+  height: 11px;
+  border-color: #bfdbfe;
+  border-top-color: #2563eb;
+}
+
 .tool-state-pre {
   margin: 0;
   overflow: auto;
@@ -5204,6 +5217,11 @@ body.is-panel-resizing .panel-resizer::after {
   margin-top: 12px;
   color: #64748b;
   font-size: 13px;
+}
+
+.product-outcome-row--after-card {
+  margin-top: 0;
+  width: 100%;
 }
 
 .product-outcome-btn {

@@ -2508,6 +2508,7 @@
         </aside>
         <div class="product-doc-stack">
           ${renderProductDocStatusCard(phaseConfig, demo, flow, tab)}
+          ${tab === "request" && flow.phase === "running" ? renderProductDocOutcomeRow(flow, { dockAfterCard: true }) : ""}
         </div>
       </div>
     </section>`;
@@ -2517,6 +2518,15 @@
     if (phase === "running") return "点击模拟成功或者模拟失败按钮查看不同执行结果分支";
     if (phase === "denied" || phase === "success" || phase === "failed") return "已到终态，按 → 可重新开始";
     return "按 ← / → 切换状态";
+  }
+
+  function renderProductDocOutcomeRow(flow, { dockAfterCard = false } = {}) {
+    const rowClass = dockAfterCard ? "product-outcome-row product-outcome-row--after-card" : "product-outcome-row";
+    return `<div class="${rowClass}">
+          <span>执行结果分支</span>
+          <button type="button" class="product-outcome-btn${flow.outcome !== "failed" ? " is-active" : ""}" data-product-doc-outcome="success">模拟成功</button>
+          <button type="button" class="product-outcome-btn${flow.outcome === "failed" ? " is-active" : ""}" data-product-doc-outcome="failed">模拟失败</button>
+        </div>`;
   }
 
   function renderProductDocRailItem(stage, index, phase) {
@@ -2647,14 +2657,11 @@
     if (stageId === "running") {
       return `${demo.runningCopy ? `<p class="product-status-copy">${escapeHTML(demo.runningCopy)}</p>` : ""}
         ${renderProductDocRequestBlock(demo, tab, true)}
-        <div class="tool-state-block">
-          <div class="tool-state-block-label">Response（接收中...）</div>
-          <div class="product-loading-line">正在等待服务器响应... <span class="spinner"></span></div>
-        </div>
-        <div class="product-outcome-row">
-          <span>执行结果分支</span>
-          <button type="button" class="product-outcome-btn${flow.outcome !== "failed" ? " is-active" : ""}" data-product-doc-outcome="success">模拟成功</button>
-          <button type="button" class="product-outcome-btn${flow.outcome === "failed" ? " is-active" : ""}" data-product-doc-outcome="failed">模拟失败</button>
+        <div class="tool-state-block tool-state-block--response-pending">
+          <div class="tool-state-block-label tool-state-block-label--with-spinner" aria-live="polite">
+            <span>Response</span>
+            <span class="product-doc-response-spinner spinner" aria-hidden="true"></span>
+          </div>
         </div>`;
     }
     if (stageId === "success") {
@@ -2693,11 +2700,7 @@
     if (stageId === "running") {
       return `${commandBlock}
         <div class="product-command-running-line"><span class="spinner"></span><span>正在执行...</span></div>
-        <div class="product-outcome-row">
-          <span>执行结果分支</span>
-          <button type="button" class="product-outcome-btn${flow.outcome !== "failed" ? " is-active" : ""}" data-product-doc-outcome="success">模拟成功</button>
-          <button type="button" class="product-outcome-btn${flow.outcome === "failed" ? " is-active" : ""}" data-product-doc-outcome="failed">模拟失败</button>
-        </div>`;
+        ${renderProductDocOutcomeRow(flow)}`;
     }
     if (stageId === "success") {
       return commandBlock;
