@@ -7,6 +7,7 @@
     recentTasks,
     enterpriseAgentCategoryTabs: rawEnterpriseAgentCategoryTabs,
     enterpriseAgents: rawEnterpriseAgents,
+    enterpriseAgentSourceScopeTabs: rawEnterpriseAgentSourceScopeTabs,
     enterpriseFlowPresets: rawEnterpriseFlowPresets,
     skillPlazaSourceFilters: rawSkillPlazaSourceFilters,
     skillPlazaCategoryFilters: rawSkillPlazaCategoryFilters,
@@ -14,7 +15,28 @@
     skillMineItems: rawSkillMineItems
   } = window.DEMO_DATA;
   const enterpriseAgentCategoryTabs = Array.isArray(rawEnterpriseAgentCategoryTabs) ? rawEnterpriseAgentCategoryTabs : [];
+  const enterpriseAgentSourceScopeTabs = Array.isArray(rawEnterpriseAgentSourceScopeTabs)
+    ? rawEnterpriseAgentSourceScopeTabs
+    : [
+        { id: "all", label: "全部" },
+        { id: "favorite", label: "我的收藏" },
+        { id: "org", label: "我的组织" }
+      ];
   const enterpriseAgents = Array.isArray(rawEnterpriseAgents) ? rawEnterpriseAgents : [];
+  const enterpriseAgentCatalog = enterpriseAgents.map((agent, index) => {
+    const seed = [...agent.id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+    const day = String(5 + (seed % 20)).padStart(2, "0");
+    const month = String(3 + (index % 2)).padStart(2, "0");
+    return {
+      ...agent,
+      publishedAt: agent.publishedAt || `2026-${month}-${day}`,
+      usageCount: agent.usageCount ?? 900 + (seed % 4100),
+      favoriteCount: agent.favoriteCount ?? 35 + (seed % 360),
+      shareCount: agent.shareCount ?? 8 + (seed % 140),
+      sourceType: agent.sourceType || (index % 4 === 1 || index % 4 === 2 ? "org" : "platform"),
+      isFavorite: agent.isFavorite ?? index % 6 === 0
+    };
+  });
   const skillPlazaSourceFilters = Array.isArray(rawSkillPlazaSourceFilters) ? rawSkillPlazaSourceFilters : [];
   const skillPlazaCategoryFilters = Array.isArray(rawSkillPlazaCategoryFilters) ? rawSkillPlazaCategoryFilters : [];
   const skillPlazaSkills = Array.isArray(rawSkillPlazaSkills) ? rawSkillPlazaSkills : [];
@@ -25,7 +47,7 @@
       : {
           default: {
             defaultQuery: "",
-            recentTaskTitle: "企业级智能体任务",
+            recentTaskTitle: "企业智能体任务",
             planningText: "正在准备执行。",
             planItems: [],
             stages: [],
@@ -44,6 +66,387 @@
   const DEFAULT_RIGHT_PANEL_WIDTH = 408;
   const MIN_RIGHT_PANEL_WIDTH = 280;
   const MIN_MAIN_AREA_WIDTH = 560;
+  const PLUGIN_TOOL_KIND_ORDER = ["mcp", "plugin", "workflow", "ontology_action"];
+  const PLUGIN_DIALOG_KIND_ORDER = ["mcp", "plugin", "workflow", "ontology_action"];
+  const PLUGIN_TOOL_KIND_META = {
+    mcp: { label: "MCP", icon: "boxes", createLabel: "创建MCP服务" },
+    plugin: { label: "OpenAPI", icon: "tool", createLabel: "创建 OpenAPI" },
+    workflow: { label: "工作流", icon: "branch", createLabel: "创建工作流" },
+    ontology_action: { label: "本体动作", icon: "building", createLabel: "创建本体动作" }
+  };
+  const INITIAL_PLUGIN_TOOLS = {
+    platform: [
+      {
+        id: "platform-execute-python",
+        name: "execute_python",
+        description:
+          "沙箱内 Python，预装 pandas、numpy、matplotlib、plotly、openpyxl、python-docx、python-pptx、requests 等常用库。",
+        enabled: true,
+        badge: "代码执行",
+        meta: "沙箱",
+        kind: "mcp"
+      },
+      {
+        id: "platform-web-search",
+        name: "web_search",
+        description: "搜索引擎检索，获取公开网页摘要与链接。",
+        enabled: true,
+        badge: "网络工具",
+        meta: "网络",
+        kind: "mcp"
+      },
+      {
+        id: "platform-create-docx",
+        name: "create_docx",
+        description: "生成 Word（.docx）；支持企业上传标准模板、表格、图表、分节、页眉页脚与样式。",
+        enabled: true,
+        badge: "文档生成",
+        meta: "文档",
+        kind: "plugin"
+      }
+    ],
+    tenant: [
+      {
+        id: "tenant-erp-mcp",
+        name: "ERP MCP",
+        description: "对接企业 ERP 的报销单草稿写入、审批发起和状态同步能力。",
+        enabled: true,
+        badge: "租户配置",
+        meta: "MCP",
+        kind: "mcp"
+      },
+      {
+        id: "tenant-ocr-openapi",
+        name: "票据 OCR 识别服务",
+        description: "识别机票行程单、酒店发票和出租车票的结构化字段。",
+        enabled: true,
+        badge: "租户配置",
+        meta: "OpenAPI",
+        kind: "plugin"
+      },
+      {
+        id: "tenant-invoice-check",
+        name: "企业验票系统接口",
+        description: "完成票据真伪核查、重复报销校验和发票抬头一致性检查。",
+        enabled: true,
+        badge: "租户配置",
+        meta: "接口",
+        kind: "plugin"
+      },
+      {
+        id: "tenant-policy-ontology",
+        name: "制度条款本体动作",
+        description: "根据企业制度本体做条款定位、实体关联和约束校验。",
+        enabled: false,
+        badge: "租户配置",
+        meta: "本体",
+        kind: "ontology_action"
+      }
+    ],
+    claw: [
+      {
+        id: "claw-ops-watch-mcp",
+        name: "运维值守Claw",
+        description: "占位文字占位文字占位文字占位文字占位文字占位文字占位文字占位文字占位文字占位文字。",
+        enabled: true,
+        badge: "Claw配置",
+        meta: "MCP",
+        kind: "mcp",
+        origin: "claw_only"
+      },
+      {
+        id: "claw-policy-center-mcp",
+        name: "制度中心MCP",
+        description: "按标准协议查询制度条款、版本记录和生效范围，并回传依据片段。",
+        enabled: true,
+        badge: "Claw配置",
+        meta: "MCP",
+        kind: "mcp",
+        origin: "claw_only"
+      },
+      {
+        id: "claw-mail-gateway-mcp",
+        name: "邮件网关MCP",
+        description: "统一发送、抄送和归档业务邮件，支持会话上下文回填。",
+        enabled: false,
+        badge: "Claw配置",
+        meta: "MCP",
+        kind: "mcp",
+        origin: "claw_only"
+      },
+      {
+        id: "workflow-invoice-validation",
+        name: "验票工作流",
+        description: "完成 OCR 识别发票、票据信息结构化提取、系统核查与合规校验。",
+        enabled: true,
+        badge: "Claw配置",
+        meta: "工作流",
+        kind: "workflow",
+        origin: "public_config"
+      },
+      {
+        id: "workflow-expense-submit",
+        name: "差旅表单填写与提交工作流",
+        description: "完成出行信息提取、字段映射、自动填充表单、ERP 写入与审批提交。",
+        enabled: true,
+        badge: "Claw配置",
+        meta: "工作流",
+        kind: "workflow",
+        origin: "claw_only"
+      },
+      {
+        id: "plugin-document-parser",
+        name: "文档解析 OpenAPI",
+        description: "解析 PDF、Word、图片文档并提取结构化字段。",
+        enabled: true,
+        badge: "Claw配置",
+        meta: "文档",
+        kind: "plugin",
+        origin: "claw_only"
+      }
+    ]
+  };
+  const PLUGIN_CONFIG_OPTIONS_BY_KIND = {
+    workflow: [
+      {
+        id: "workflow-invoice-validation",
+        name: "验票工作流",
+        description: "完成 OCR 识别发票、票据信息结构化提取、系统核查与合规校验。",
+        kind: "workflow",
+        badge: "办公场景",
+        hint: "适合差旅报销、票据审核等标准化办公流程。"
+      },
+      {
+        id: "workflow-expense-submit",
+        name: "差旅表单填写与提交工作流",
+        description: "完成出行信息提取、字段映射、自动填充表单、ERP 写入与审批提交。",
+        kind: "workflow",
+        badge: "办公场景",
+        hint: "适合固定字段映射和 ERP 回写类任务。"
+      },
+      {
+        id: "workflow-intelligence-process-chain",
+        name: "情报处理链路",
+        description: "完成多源采集、去重过滤、敏感校验和结构化拆解。",
+        kind: "workflow",
+        badge: "情报场景",
+        hint: "适合多源情报归集和结构化处理场景。"
+      },
+      {
+        id: "workflow-graph-trace",
+        name: "扩散检索 / 图谱溯源",
+        description: "围绕重点动态做关联扩散、本体检索和图谱关系溯源。",
+        kind: "workflow",
+        badge: "情报场景",
+        hint: "适合需要依据下钻和图谱追踪的分析任务。"
+      },
+      {
+        id: "workflow-contract-review",
+        name: "合同审阅流程",
+        description: "串联条款识别、风险判定和审批建议输出。",
+        kind: "workflow",
+        badge: "法务模版",
+        hint: "适合高规则约束的业务审批场景。"
+      }
+    ],
+    mcp: [
+      {
+        id: "mcp-policy-center",
+        name: "制度中心 MCP",
+        description: "按标准协议查询制度条款、版本记录和生效范围。",
+        kind: "mcp",
+        badge: "协议接入",
+        hint: "适合需要标准化协议调用与结果透传的场景。"
+      },
+      {
+        id: "mcp-mail-gateway",
+        name: "邮件网关 MCP",
+        description: "统一发送、抄送和归档业务邮件，支持会话上下文回填。",
+        kind: "mcp",
+        badge: "消息能力",
+        hint: "适合外部系统能力已封装为 MCP Server 的情况。"
+      },
+      {
+        id: "mcp-security-validation",
+        name: "安全校验服务 MCP",
+        description: "对敏感词、越权调用和高风险参数进行预校验。",
+        kind: "mcp",
+        badge: "风控",
+        hint: "适合在执行前增加统一的安全防线。"
+      }
+    ],
+    plugin: [
+      {
+        id: "plugin-document-parser",
+        name: "文档解析 OpenAPI",
+        description: "解析 PDF、Word、图片文档并提取结构化字段。",
+        kind: "plugin",
+        badge: "文档",
+        hint: "适合通过 OpenAPI 暴露成熟业务接口。"
+      },
+      {
+        id: "plugin-map-navigation",
+        name: "地图导航 OpenAPI",
+        description: "支持路径规划、位置检索和地理围栏判断。",
+        kind: "plugin",
+        badge: "外部服务",
+        hint: "适合给 Claw 补充垂直领域能力。"
+      },
+      {
+        id: "plugin-code-interpreter",
+        name: "代码解释器 OpenAPI",
+        description: "执行受控脚本、处理表格数据并产出可下载结果。",
+        kind: "plugin",
+        badge: "执行",
+        hint: "适合在对话中补充计算与文件处理能力。"
+      }
+    ],
+    ontology_action: [
+      {
+        id: "ontology-entity-upsert",
+        name: "本体实体写入",
+        description: "向企业本体写入或更新实体及其属性、关系边与来源依据。",
+        kind: "ontology_action",
+        badge: "本体",
+        hint: "适合结构化业务对象落库与图谱对齐。"
+      },
+      {
+        id: "ontology-relation-bind",
+        name: "关系绑定动作",
+        description: "在本体中建立、调整或解除实体间的业务关系与约束。",
+        kind: "ontology_action",
+        badge: "图谱",
+        hint: "适合多对象协同与依赖建模场景。"
+      },
+      {
+        id: "ontology-query-expand",
+        name: "本体扩散查询",
+        description: "基于种子实体按策略做关联扩散、过滤与结果裁剪。",
+        kind: "ontology_action",
+        badge: "检索",
+        hint: "适合依据下钻与关联发现。"
+      }
+    ]
+  };
+  const ALL_PLUGIN_CONFIG_OPTIONS = Object.values(PLUGIN_CONFIG_OPTIONS_BY_KIND)
+    .flat()
+    .map((item, index) => ({
+      ...item,
+      updatedAtLabel: formatPluginUpdatedAtLabel(index)
+    }));
+  const PLUGIN_MARKETPLACE_SOURCE_FILTERS = [
+    { value: "all", label: "全部组件" },
+    { value: "organization", label: "我的组织" }
+  ];
+  const PLUGIN_MARKETPLACE_CATEGORY_FILTERS = [
+    { value: "all", label: "全部类型" },
+    { value: "office", label: "办公人事" },
+    { value: "enterprise", label: "企业服务" },
+    { value: "efficiency", label: "效率工具" },
+    { value: "learning", label: "学习教育" },
+    { value: "marketing", label: "营销创办" },
+    { value: "manufacturing", label: "智能制造" },
+    { value: "other", label: "其他" }
+  ];
+  const PLUGIN_MARKETPLACE_ITEMS = [
+    {
+      id: "market-baidu-baike",
+      name: "百度百科",
+      author: "@个人发布",
+      description: "查询水务相关词条名或者词条ID去百度百科查询跟该词条相关的内容",
+      category: "other",
+      kind: "mcp",
+      icon: "tool",
+      tone: "orange"
+    },
+    {
+      id: "market-pathogen-mcp",
+      name: "病原实时鉴定MCPServer1",
+      author: "@个人发布",
+      description: "",
+      category: "other",
+      kind: "mcp",
+      icon: "boxes",
+      tone: "orange"
+    },
+    {
+      id: "market-mcp-admin",
+      name: "测试mcp管理",
+      author: "@个人发布",
+      description: "",
+      category: "office",
+      kind: "mcp",
+      icon: "tool",
+      tone: "orange"
+    },
+    {
+      id: "market-audio-parser",
+      name: "音频解析",
+      author: "@官方发布",
+      description: "音频解析工具，输出长字符串，支持MP3/M4A/WAV/PCM/AMR/OGG类别。",
+      category: "office",
+      kind: "plugin",
+      icon: "chart-bars",
+      tone: "cyan"
+    },
+    {
+      id: "market-writing-template",
+      name: "写作模板",
+      author: "@官方发布",
+      description:
+        "插件可在公文写作、行业研究报告、商业分析报告、邮件撰写、周报撰写五大内置模板中自动挑选最契合的写作提示。它先解析输入主题与篇幅要求，再生成结构化提纲。",
+      category: "office",
+      kind: "mcp",
+      icon: "book",
+      tone: "indigo",
+      source: "organization"
+    },
+    {
+      id: "market-jwt-encode",
+      name: "JWT编码",
+      author: "@官方发布",
+      description:
+        "JWT编码器是一项将结构化声明快速封装、签名并序列化为 RFC7519 标准JSON Web Token 的核心能力，自动完成 Header 构造与 Payload 校验。",
+      category: "other",
+      kind: "plugin",
+      icon: "code",
+      tone: "cyan"
+    },
+    {
+      id: "market-user-agent",
+      name: "随机生成User-Agent",
+      author: "@官方发布",
+      description:
+        "专门用于随机生成或自动轮换用户标识字符串，为每一次请求动态赋予全新的用户代理。用户代理模拟器本质上是浏览器或爬虫请求中的身份生成工具。",
+      category: "other",
+      kind: "plugin",
+      icon: "spark",
+      tone: "violet"
+    },
+    {
+      id: "market-language-detect",
+      name: "语言检测",
+      author: "@官方发布",
+      description:
+        "语言检测是一项智能文本识别能力，能够自动判断输入内容所属的语言类型及其国家或地区。例如，系统可精准识别中文、英文、日文等常见语言。",
+      category: "enterprise",
+      kind: "plugin",
+      icon: "globe",
+      tone: "blue"
+    },
+    {
+      id: "market-timezone-convert",
+      name: "时区转换",
+      author: "@官方发布",
+      description:
+        "时区转换是一项实用的时间管理工具，能够根据用户输入的时间和原始时区，自动换算为目标时区的对应时间。该功能支持全球主要时区。",
+      category: "efficiency",
+      kind: "plugin",
+      icon: "clock",
+      tone: "indigo",
+      source: "organization"
+    }
+  ];
   const DEFAULT_MARKDOWN_DRAFT = `# BX-DRAFT-7781
 
 ## 报销概览
@@ -78,10 +481,16 @@
     },
     enterprise: {
       query: "",
+      sourceScope: "all",
       category: "all",
+      sort: "latest",
       draftAgentId: "",
-      activeSessionId: ""
+      activeSessionId: "",
+      summonedAgentIds: [],
+      selectedAgentId: "",
+      agentSelectorOpen: false
     },
+    enterpriseFavoriteOverrides: {},
     enterpriseSessions: {},
     sessionMenuId: null,
     renamingSessionId: null,
@@ -116,6 +525,9 @@
       editDraft: "",
       queueMenuId: ""
     },
+    composer: {
+      skills: []
+    },
     previewDrafts: {
       "bx-draft-7781-md": DEFAULT_MARKDOWN_DRAFT
     },
@@ -135,7 +547,31 @@
       jumpInput: "",
       enabledOverrides: {},
       deletedIds: {},
-      importedFromPlaza: []
+      importedFromPlaza: [],
+      configDialogOpen: false,
+      configDialogQuery: "",
+      configDialogSource: "all",
+      configDialogPage: 1,
+      configDialogPageSize: 10,
+      configDialogJumpInput: ""
+    },
+    pluginHub: {
+      tab: "mine",
+      query: "",
+      kind: "mcp",
+      origin: "all",
+      marketQuery: "",
+      marketSource: "all",
+      marketCategory: "all",
+      marketAddSequence: 0,
+      tools: clonePluginTools(INITIAL_PLUGIN_TOOLS),
+      dialogOpen: false,
+      dialogKind: "mcp",
+      dialogQuery: "",
+      dialogSelectedIds: [],
+      dialogPage: 1,
+      dialogPageSize: 10,
+      dialogJumpInput: ""
     },
     productDocs: {
       tab: "request",
@@ -171,6 +607,14 @@
     contextList: document.getElementById("contextList"),
     contextCount: document.getElementById("contextCount"),
     composerTextarea: document.getElementById("composerTextarea"),
+    composerInputSurface: document.getElementById("composerInputSurface"),
+    composerSkillChips: document.getElementById("composerSkillChips"),
+    composerAgentWrap: document.getElementById("composerAgentWrap"),
+    composerAgentButton: document.getElementById("composerAgentButton"),
+    composerAgentLabel: document.getElementById("composerAgentLabel"),
+    composerAgentMenu: document.getElementById("composerAgentMenu"),
+    composerAgentList: document.getElementById("composerAgentList"),
+    composerAgentSummonOther: document.getElementById("composerAgentSummonOther"),
     skillPicker: document.getElementById("skillPicker"),
     skillPickerScroll: document.getElementById("skillPickerScroll"),
     skillPickerList: document.getElementById("skillPickerList"),
@@ -201,21 +645,42 @@
   const COMPOSER_SKILLS = [
     {
       id: "ppt",
+      label: "Frontend Slides",
       blurb: "演示稿",
       detail: "创建网页幻灯片与动画演示,也可对接 PowerPoint 工作流."
     },
-    { id: "xlsx", blurb: "表格", detail: "分析、筛选与带公式的可编辑工作簿." },
-    { id: "docx", blurb: "文档", detail: "长文档撰写、版式与交付级 Word 类产出." },
-    { id: "slides", blurb: "PPTX", detail: "生成可编辑的 .pptx,适合套模板与改稿." },
-    { id: "spreadsheets", blurb: "表格进阶", detail: "xlsx 公式、图表、数据表与多 Sheet 组织." },
-    { id: "excalidraw-diagram", blurb: "图示", detail: "Excalidraw 架构/流程/白板,便于在对话里传图改图." },
-    { id: "presentation-materials", blurb: "材料", detail: "多源合成汇报包、技术分享与宣讲稿." },
-    { id: "frontend-design", blurb: "前端", detail: "生产级 Web 界面,遵循既有设计语言与组件节奏." },
-    { id: "skill-creator", blurb: "造技能", detail: "为 Agent 定义技能说明、资源边界与可复用调用方式." },
-    { id: "whitepaper-revision", blurb: "白皮书", detail: "在保留结构的前提下修订与对齐术语的企业白皮书." },
-    { id: "user-manual", blurb: "手册", detail: "多章节用户手册,含操作路径与版式级截图位." },
-    { id: "standard-operations-material", blurb: "标作", detail: "标准作业说明,流程与责任边界可评审." },
-    { id: "cecloud-ai-design", blurb: "主题", detail: "企业 B 端风格与品牌蓝,列表/表单/大留白布局." }
+    { id: "xlsx", label: "Spreadsheets", blurb: "表格", detail: "分析、筛选与带公式的可编辑工作簿." },
+    { id: "docx", label: "Documents", blurb: "文档", detail: "长文档撰写、版式与交付级 Word 类产出." },
+    { id: "slides", label: "PPTX Slides", blurb: "PPTX", detail: "生成可编辑的 .pptx,适合套模板与改稿." },
+    { id: "spreadsheets", label: "Spreadsheets Pro", blurb: "表格进阶", detail: "xlsx 公式、图表、数据表与多 Sheet 组织." },
+    {
+      id: "excalidraw-diagram",
+      label: "Excalidraw Diagram",
+      blurb: "图示",
+      detail: "Excalidraw 架构/流程/白板,便于在对话里传图改图."
+    },
+    {
+      id: "presentation-materials",
+      label: "Presentation Materials",
+      blurb: "材料",
+      detail: "多源合成汇报包、技术分享与宣讲稿."
+    },
+    { id: "frontend-design", label: "Frontend Design", blurb: "前端", detail: "生产级 Web 界面,遵循既有设计语言与组件节奏." },
+    { id: "skill-creator", label: "Skill Creator", blurb: "造技能", detail: "为 Agent 定义技能说明、资源边界与可复用调用方式." },
+    {
+      id: "whitepaper-revision",
+      label: "Whitepaper Revision",
+      blurb: "白皮书",
+      detail: "在保留结构的前提下修订与对齐术语的企业白皮书."
+    },
+    { id: "user-manual", label: "User Manual", blurb: "手册", detail: "多章节用户手册,含操作路径与版式级截图位." },
+    {
+      id: "standard-operations-material",
+      label: "Standard Operations",
+      blurb: "标作",
+      detail: "标准作业说明,流程与责任边界可评审."
+    },
+    { id: "cecloud-ai-design", label: "CeCloud AI Design", blurb: "主题", detail: "企业 B 端风格与品牌蓝,列表/表单/大留白布局." }
   ];
 
   const skillUI = {
@@ -323,15 +788,146 @@
     return s ? s.detail || s.blurb || "" : "";
   }
 
+  function getComposerSkillLabel(id) {
+    const skill = getSkillById(id);
+    if (!skill) return id;
+    if (skill.label) return skill.label;
+    if (id.length <= 4 && !id.includes("-")) return id.toUpperCase();
+    return id
+      .split("-")
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+      .join(" ");
+  }
+
+  function getComposerSkillTokens() {
+    return state.composer.skills.map((id) => `/${id}`).join(" ");
+  }
+
+  function renderComposerSkillChip(skillId) {
+    const label = getComposerSkillLabel(skillId);
+    return `<span class="composer-skill-chip" data-composer-skill-id="${escapeAttr(skillId)}">
+      <span class="composer-skill-chip-icon" aria-hidden="true">${icon("skill")}</span>
+      <span class="composer-skill-chip-label">${escapeHTML(label)}</span>
+      <button type="button" class="composer-skill-chip-remove" data-composer-skill-remove="${escapeAttr(skillId)}" aria-label="移除 ${escapeAttr(label)}">${icon("x")}</button>
+    </span>`;
+  }
+
+  function renderComposerSkillChips() {
+    if (!nodes.composerSkillChips) return;
+    const chips = state.composer.skills;
+    nodes.composerSkillChips.innerHTML = chips.map((skillId) => renderComposerSkillChip(skillId)).join("");
+    nodes.composerSkillChips.hidden = chips.length === 0;
+    if (nodes.composerInputSurface) {
+      nodes.composerInputSurface.classList.toggle("has-skill-chips", chips.length > 0);
+    }
+  }
+
+  function removeComposerSkill(skillId) {
+    state.composer.skills = state.composer.skills.filter((id) => id !== skillId);
+    renderComposerSkillChips();
+    syncEnterpriseDraftQueryFromComposer();
+    updateComposerSendButton();
+  }
+
+  function clearComposerSkills() {
+    state.composer.skills = [];
+    renderComposerSkillChips();
+  }
+
+  function clearComposerDraft() {
+    if (nodes.composerTextarea) nodes.composerTextarea.value = "";
+    clearComposerSkills();
+  }
+
+  function getSummonedEnterpriseAgents() {
+    const ids = Array.isArray(state.enterprise.summonedAgentIds) ? state.enterprise.summonedAgentIds : [];
+    return ids.map((id) => getEnterpriseAgentById(id)).filter(Boolean);
+  }
+
+  function getSelectedEnterpriseAgent() {
+    return getEnterpriseAgentById(state.enterprise.selectedAgentId);
+  }
+
+  function rememberSummonedEnterpriseAgent(agentId) {
+    const agent = getEnterpriseAgentById(agentId);
+    if (!agent) return null;
+    if (!state.enterprise.summonedAgentIds.includes(agent.id)) {
+      state.enterprise.summonedAgentIds.push(agent.id);
+    }
+    state.enterprise.selectedAgentId = agent.id;
+    return agent;
+  }
+
+  function renderComposerAgentSelector() {
+    if (!nodes.composerAgentButton || !nodes.composerAgentLabel || !nodes.composerAgentMenu) return;
+    const selected = getSelectedEnterpriseAgent();
+    const agents = getSummonedEnterpriseAgents();
+    const open = Boolean(state.enterprise.agentSelectorOpen);
+    nodes.composerAgentLabel.textContent = selected ? selected.name : "智能体";
+    nodes.composerAgentButton.classList.toggle("is-selected", Boolean(selected));
+    nodes.composerAgentButton.setAttribute("aria-expanded", open ? "true" : "false");
+    nodes.composerAgentButton.title = selected ? `当前智能体：${selected.name}` : "选择智能体";
+    nodes.composerAgentButton.setAttribute("aria-label", selected ? `当前智能体：${selected.name}` : "选择智能体");
+    nodes.composerAgentMenu.hidden = !open;
+
+    if (!nodes.composerAgentList) return;
+    nodes.composerAgentList.innerHTML = agents.length
+      ? agents
+          .map((agent) => {
+            const active = agent.id === state.enterprise.selectedAgentId;
+            return `<button
+              type="button"
+              class="composer-agent-option${active ? " is-active" : ""}"
+              data-composer-agent-select="${escapeAttr(agent.id)}"
+              role="option"
+              aria-selected="${active ? "true" : "false"}"
+            >
+              <span class="composer-agent-avatar" aria-hidden="true">${escapeHTML(getAgentAvatarInitial(agent.name))}</span>
+              <span class="composer-agent-option-main">
+                <strong>${escapeHTML(agent.name)}</strong>
+                <span>${escapeHTML(agent.description)}</span>
+              </span>
+              ${active ? `<span class="composer-agent-check" aria-hidden="true">${icon("check")}</span>` : ""}
+            </button>`;
+          })
+          .join("")
+      : `<div class="composer-agent-empty">暂无已召唤智能体</div>`;
+  }
+
+  function selectSummonedEnterpriseAgent(agentId) {
+    const agent = getEnterpriseAgentById(agentId);
+    if (!agent || !state.enterprise.summonedAgentIds.includes(agent.id)) return;
+    state.enterprise.selectedAgentId = agent.id;
+    state.enterprise.agentSelectorOpen = false;
+    renderComposerAgentSelector();
+    nodes.composerTextarea?.focus();
+  }
+
+  function summonEnterpriseAgent(agentId) {
+    const agent = rememberSummonedEnterpriseAgent(agentId);
+    if (!agent) return;
+    state.enterprise.agentSelectorOpen = false;
+    showSkillPlazaToast(`已召唤「${agent.name}」`);
+    navigate("chat");
+    window.requestAnimationFrame(() => nodes.composerTextarea?.focus());
+  }
+
   function init() {
     hydrateRouteFromHash();
     if (window.AutomationTasksModule?.init) {
       window.AutomationTasksModule.init({ container: nodes.stream });
     }
+    if (window.ClawConfigModule?.init) {
+      window.ClawConfigModule.init({ container: nodes.stream });
+    }
+    if (window.FilesModule?.init) {
+      window.FilesModule.init({ container: nodes.stream });
+    }
     syncAutomationSidebarState();
     bindEvents();
     initPanelResizer();
     initSkillPicker();
+    initComposerSkills();
     window.__routeTo = (route) => navigate(route);
     window.addEventListener("hashchange", handleHashChange);
     window.addEventListener("automation-tasks:updated", handleAutomationTasksUpdated);
@@ -400,6 +996,251 @@
         return;
       }
 
+      const pluginHubTab = event.target.closest("[data-plugin-hub-tab]");
+      if (pluginHubTab) {
+        event.preventDefault();
+        state.pluginHub.tab = pluginHubTab.getAttribute("data-plugin-hub-tab") === "plaza" ? "plaza" : "mine";
+        if (state.pluginHub.tab === "plaza") closePluginConfigDialog();
+        render();
+        return;
+      }
+
+      const pluginKind = event.target.closest("[data-plugin-kind]");
+      if (pluginKind) {
+        event.preventDefault();
+        const next = pluginKind.getAttribute("data-plugin-kind") || "plugin";
+        state.pluginHub.kind = PLUGIN_TOOL_KIND_ORDER.includes(next) ? next : "plugin";
+        render();
+        return;
+      }
+
+      const pluginOrigin = event.target.closest("[data-plugin-origin]");
+      if (pluginOrigin) {
+        event.preventDefault();
+        const next = pluginOrigin.getAttribute("data-plugin-origin") || "all";
+        state.pluginHub.origin = ["all", "builtin", "claw"].includes(next) ? next : "all";
+        render();
+        return;
+      }
+
+      const pluginMarketSource = event.target.closest("[data-plugin-market-source]");
+      if (pluginMarketSource) {
+        event.preventDefault();
+        const next = pluginMarketSource.getAttribute("data-plugin-market-source") || "all";
+        state.pluginHub.marketSource = PLUGIN_MARKETPLACE_SOURCE_FILTERS.some((item) => item.value === next)
+          ? next
+          : "all";
+        render();
+        return;
+      }
+
+      const pluginMarketCategory = event.target.closest("[data-plugin-market-category]");
+      if (pluginMarketCategory) {
+        event.preventDefault();
+        const next = pluginMarketCategory.getAttribute("data-plugin-market-category") || "all";
+        state.pluginHub.marketCategory = PLUGIN_MARKETPLACE_CATEGORY_FILTERS.some((item) => item.value === next)
+          ? next
+          : "all";
+        render();
+        return;
+      }
+
+      const pluginMarketAction = event.target.closest("[data-plugin-market-action]");
+      if (pluginMarketAction) {
+        event.preventDefault();
+        const action = pluginMarketAction.getAttribute("data-plugin-market-action");
+        showSkillPlazaToast(action === "publish" ? "上架组件入口即将接入。" : "创建组件入口即将接入。");
+        return;
+      }
+
+      const pluginMarketAdd = event.target.closest("[data-plugin-market-add]");
+      if (pluginMarketAdd) {
+        event.preventDefault();
+        event.stopPropagation();
+        addPluginMarketplaceItemToMine(pluginMarketAdd.getAttribute("data-plugin-market-add") || "");
+        showSkillPlazaToast("已成功添加");
+        render();
+        return;
+      }
+
+      const pluginMarketCard = event.target.closest("[data-plugin-market-card]");
+      if (pluginMarketCard) {
+        event.preventDefault();
+        const id = pluginMarketCard.getAttribute("data-plugin-market-card") || "";
+        const item = PLUGIN_MARKETPLACE_ITEMS.find((row) => row.id === id);
+        if (item) showSkillPlazaToast(`查看组件「${item.name}」（演示）`);
+        return;
+      }
+
+      const pluginEnableAll = event.target.closest("[data-plugin-enable-all]");
+      if (pluginEnableAll) {
+        event.preventDefault();
+        setAllPluginToolsEnabled(true);
+        render();
+        return;
+      }
+
+      const pluginRefresh = event.target.closest("[data-plugin-refresh]");
+      if (pluginRefresh) {
+        event.preventDefault();
+        showSkillPlazaToast("插件列表已刷新。");
+        return;
+      }
+
+      const pluginConfigOpen = event.target.closest("[data-plugin-config-open]");
+      if (pluginConfigOpen) {
+        event.preventDefault();
+        openPluginConfigDialog();
+        render();
+        return;
+      }
+
+      const pluginToggle = event.target.closest("[data-plugin-toggle]");
+      if (pluginToggle) {
+        event.preventDefault();
+        togglePluginTool(
+          pluginToggle.getAttribute("data-plugin-scope") || "",
+          pluginToggle.getAttribute("data-plugin-toggle") || ""
+        );
+        render();
+        return;
+      }
+
+      const pluginView = event.target.closest("[data-plugin-view]");
+      if (pluginView) {
+        event.preventDefault();
+        const id = pluginView.getAttribute("data-plugin-view") || "";
+        const row = getPluginToolRows().find(({ item }) => item.id === id);
+        if (row) showSkillPlazaToast(`${row.item.name}：${row.item.description || "暂无描述"}`);
+        return;
+      }
+
+      const pluginDelete = event.target.closest("[data-plugin-delete]");
+      if (pluginDelete) {
+        event.preventDefault();
+        const name = deletePluginTool(
+          pluginDelete.getAttribute("data-plugin-scope") || "",
+          pluginDelete.getAttribute("data-plugin-delete") || ""
+        );
+        if (name) showSkillPlazaToast(`已移除「${name}」`);
+        render();
+        return;
+      }
+
+      const dialogClose = event.target.closest("[data-plugin-dialog-close]");
+      if (dialogClose) {
+        event.preventDefault();
+        closePluginConfigDialog();
+        render();
+        return;
+      }
+
+      const dialogBackdrop = event.target.closest("[data-plugin-dialog-backdrop]");
+      if (dialogBackdrop && event.target === dialogBackdrop) {
+        event.preventDefault();
+        closePluginConfigDialog();
+        render();
+        return;
+      }
+
+      const dialogTab = event.target.closest("[data-plugin-dialog-tab]");
+      if (dialogTab) {
+        event.preventDefault();
+        const next = dialogTab.getAttribute("data-plugin-dialog-tab") || "mcp";
+        state.pluginHub.dialogKind = PLUGIN_DIALOG_KIND_ORDER.includes(next) ? next : "mcp";
+        state.pluginHub.dialogPage = 1;
+        render();
+        return;
+      }
+
+      const dialogRefresh = event.target.closest("[data-plugin-dialog-refresh]");
+      if (dialogRefresh) {
+        event.preventDefault();
+        showSkillPlazaToast("插件列表已刷新。");
+        return;
+      }
+
+      const dialogCreate = event.target.closest("[data-plugin-dialog-create]");
+      if (dialogCreate) {
+        event.preventDefault();
+        const kind = state.pluginHub.dialogKind;
+        showSkillPlazaToast(`${PLUGIN_TOOL_KIND_META[kind]?.createLabel || "创建入口"}即将接入。`);
+        return;
+      }
+
+      const dialogView = event.target.closest("[data-plugin-dialog-view]");
+      if (dialogView) {
+        event.preventDefault();
+        const item = findPluginConfigOption(dialogView.getAttribute("data-plugin-dialog-view") || "");
+        if (item) showSkillPlazaToast(`${item.name}：${item.description || item.hint}`);
+        return;
+      }
+
+      const dialogSelect = event.target.closest("[data-plugin-dialog-select]");
+      if (dialogSelect) {
+        event.preventDefault();
+        togglePluginDialogSelection(dialogSelect.getAttribute("data-plugin-dialog-select") || "");
+        render();
+        return;
+      }
+
+      const dialogPrev = event.target.closest("[data-plugin-dialog-prev]");
+      if (dialogPrev) {
+        if (dialogPrev.hasAttribute("disabled")) return;
+        event.preventDefault();
+        state.pluginHub.dialogPage = Math.max(1, state.pluginHub.dialogPage - 1);
+        render();
+        return;
+      }
+
+      const dialogNext = event.target.closest("[data-plugin-dialog-next]");
+      if (dialogNext) {
+        if (dialogNext.hasAttribute("disabled")) return;
+        event.preventDefault();
+        const totalPages = getPluginDialogTotalPages();
+        state.pluginHub.dialogPage = Math.min(totalPages, state.pluginHub.dialogPage + 1);
+        render();
+        return;
+      }
+
+      const dialogPage = event.target.closest("[data-plugin-dialog-page]");
+      if (dialogPage) {
+        event.preventDefault();
+        const page = Number(dialogPage.getAttribute("data-plugin-dialog-page"));
+        if (!Number.isFinite(page)) return;
+        state.pluginHub.dialogPage = page;
+        render();
+        return;
+      }
+
+      const dialogPageSize = event.target.closest("[data-plugin-dialog-page-size]");
+      if (dialogPageSize) {
+        event.preventDefault();
+        const size = Number(dialogPageSize.getAttribute("data-plugin-dialog-page-size"));
+        if (![10, 20, 50].includes(size)) return;
+        state.pluginHub.dialogPageSize = size;
+        state.pluginHub.dialogPage = Math.min(state.pluginHub.dialogPage, getPluginDialogTotalPages());
+        render();
+        return;
+      }
+
+      const dialogJump = event.target.closest("[data-plugin-dialog-jump-apply]");
+      if (dialogJump) {
+        event.preventDefault();
+        applyPluginDialogJump();
+        return;
+      }
+
+      const dialogConfirm = event.target.closest("[data-plugin-dialog-confirm]");
+      if (dialogConfirm) {
+        event.preventDefault();
+        const count = confirmPluginConfigSelections();
+        closePluginConfigDialog();
+        showSkillPlazaToast(count ? `已添加 ${count} 个插件到 Claw配置` : "所选插件已在列表中。");
+        render();
+        return;
+      }
+
       const productDocAction = event.target.closest("[data-product-doc-action]");
       if (productDocAction) {
         event.preventDefault();
@@ -427,9 +1268,113 @@
         return;
       }
 
-      const mineImport = event.target.closest("[data-skill-mine-import]");
-      if (mineImport) {
-        showSkillPlazaToast("导入技能入口即将接入。");
+      const mineConfigOpen = event.target.closest("[data-skill-mine-config-open]");
+      if (mineConfigOpen) {
+        event.preventDefault();
+        openSkillConfigDialog();
+        render();
+        return;
+      }
+
+      const skillConfigClose = event.target.closest("[data-skill-config-close]");
+      if (skillConfigClose) {
+        event.preventDefault();
+        closeSkillConfigDialog();
+        render();
+        return;
+      }
+
+      const skillConfigBackdrop = event.target.closest("[data-skill-config-backdrop]");
+      if (skillConfigBackdrop && event.target === skillConfigBackdrop) {
+        closeSkillConfigDialog();
+        render();
+        return;
+      }
+
+      const skillConfigRefresh = event.target.closest("[data-skill-config-refresh]");
+      if (skillConfigRefresh) {
+        showSkillPlazaToast("技能列表已刷新。");
+        return;
+      }
+
+      const skillConfigCreate = event.target.closest("[data-skill-config-create]");
+      if (skillConfigCreate) {
+        showSkillPlazaToast("创建技能入口即将接入。");
+        return;
+      }
+
+      const skillConfigView = event.target.closest("[data-skill-config-view]");
+      if (skillConfigView) {
+        const sk = skillPlazaSkills.find((s) => s.id === skillConfigView.getAttribute("data-skill-config-view"));
+        if (sk) showSkillPlazaToast(`${sk.name}：${sk.description || "暂无描述"}`);
+        return;
+      }
+
+      const skillConfigToggle = event.target.closest("[data-skill-config-toggle]");
+      if (skillConfigToggle) {
+        event.preventDefault();
+        toggleSkillConfigSelection(skillConfigToggle.getAttribute("data-skill-config-toggle") || "");
+        render();
+        return;
+      }
+
+      const skillConfigChipRemove = event.target.closest("[data-skill-config-chip-remove]");
+      if (skillConfigChipRemove) {
+        event.preventDefault();
+        removePlazaSkillFromMine(skillConfigChipRemove.getAttribute("data-skill-config-chip-remove") || "");
+        render();
+        return;
+      }
+
+      const skillConfigPrev = event.target.closest("[data-skill-config-prev]");
+      if (skillConfigPrev) {
+        if (skillConfigPrev.hasAttribute("disabled")) return;
+        event.preventDefault();
+        state.skillMine.configDialogPage = Math.max(1, state.skillMine.configDialogPage - 1);
+        render();
+        return;
+      }
+
+      const skillConfigNext = event.target.closest("[data-skill-config-next]");
+      if (skillConfigNext) {
+        if (skillConfigNext.hasAttribute("disabled")) return;
+        event.preventDefault();
+        state.skillMine.configDialogPage = Math.min(
+          getSkillConfigDialogTotalPages(),
+          state.skillMine.configDialogPage + 1
+        );
+        render();
+        return;
+      }
+
+      const skillConfigPage = event.target.closest("[data-skill-config-page]");
+      if (skillConfigPage) {
+        const page = Number(skillConfigPage.getAttribute("data-skill-config-page"));
+        if (!Number.isNaN(page) && page >= 1) {
+          state.skillMine.configDialogPage = page;
+          render();
+        }
+        return;
+      }
+
+      const skillConfigPageSize = event.target.closest("[data-skill-config-page-size]");
+      if (skillConfigPageSize) {
+        const size = Number(skillConfigPageSize.getAttribute("data-skill-config-page-size"));
+        if ([10, 20, 50].includes(size)) {
+          state.skillMine.configDialogPageSize = size;
+          state.skillMine.configDialogPage = Math.min(
+            state.skillMine.configDialogPage,
+            getSkillConfigDialogTotalPages()
+          );
+          render();
+        }
+        return;
+      }
+
+      const skillConfigJumpApply = event.target.closest("[data-skill-config-jump-apply]");
+      if (skillConfigJumpApply) {
+        event.preventDefault();
+        applySkillConfigDialogJump();
         return;
       }
 
@@ -521,6 +1466,24 @@
         return;
       }
 
+      const enterpriseSourceScope = event.target.closest("[data-agent-source-scope]");
+      if (enterpriseSourceScope) {
+        event.preventDefault();
+        const next = enterpriseSourceScope.getAttribute("data-agent-source-scope") || "all";
+        state.enterprise.sourceScope = ["all", "favorite", "org"].includes(next) ? next : "all";
+        render();
+        return;
+      }
+
+      const enterpriseSort = event.target.closest("[data-agent-sort]");
+      if (enterpriseSort) {
+        event.preventDefault();
+        const next = enterpriseSort.getAttribute("data-agent-sort") || "latest";
+        state.enterprise.sort = next === "hot" ? "hot" : "latest";
+        render();
+        return;
+      }
+
       const enterpriseTab = event.target.closest("[data-agent-tab]");
       if (enterpriseTab) {
         event.preventDefault();
@@ -529,10 +1492,18 @@
         return;
       }
 
+      const enterpriseFav = event.target.closest("[data-enterprise-fav]");
+      if (enterpriseFav) {
+        event.preventDefault();
+        event.stopPropagation();
+        toggleEnterpriseAgentFavorite(enterpriseFav.getAttribute("data-enterprise-fav") || "");
+        return;
+      }
+
       const enterpriseChat = event.target.closest("[data-enterprise-chat]");
       if (enterpriseChat) {
         event.preventDefault();
-        openEnterpriseDraft(enterpriseChat.getAttribute("data-enterprise-chat"));
+        summonEnterpriseAgent(enterpriseChat.getAttribute("data-enterprise-chat"));
         return;
       }
 
@@ -654,6 +1625,74 @@
       if (mineJumpField) {
         state.skillMine.jumpInput = mineJumpField.value || "";
       }
+
+      const skillConfigSearch = event.target.closest("[data-skill-config-search]");
+      if (skillConfigSearch) {
+        state.skillMine.configDialogQuery = skillConfigSearch.value || "";
+        state.skillMine.configDialogPage = 1;
+        render();
+        return;
+      }
+
+      const skillConfigSource = event.target.closest("[data-skill-config-source]");
+      if (skillConfigSource) {
+        const next = skillConfigSource.value || "all";
+        state.skillMine.configDialogSource = skillPlazaSourceFilters.some((f) => f.value === next) ? next : "all";
+        state.skillMine.configDialogPage = 1;
+        render();
+        return;
+      }
+
+      const skillConfigJumpField = event.target.closest("[data-skill-config-jump]");
+      if (skillConfigJumpField) {
+        state.skillMine.configDialogJumpInput = skillConfigJumpField.value || "";
+        return;
+      }
+
+      const pluginSearch = event.target.closest("[data-plugin-search]");
+      if (pluginSearch) {
+        state.pluginHub.query = pluginSearch.value || "";
+        render();
+        return;
+      }
+
+      const pluginMarketSearch = event.target.closest("[data-plugin-market-search]");
+      if (pluginMarketSearch) {
+        state.pluginHub.marketQuery = pluginMarketSearch.value || "";
+        render();
+        return;
+      }
+
+      const pluginDialogSearch = event.target.closest("[data-plugin-dialog-search]");
+      if (pluginDialogSearch) {
+        state.pluginHub.dialogQuery = pluginDialogSearch.value || "";
+        state.pluginHub.dialogPage = 1;
+        render();
+        return;
+      }
+
+      const pluginDialogJump = event.target.closest("[data-plugin-dialog-jump]");
+      if (pluginDialogJump) {
+        state.pluginHub.dialogJumpInput = pluginDialogJump.value || "";
+      }
+    });
+
+    nodes.stream.addEventListener("change", (event) => {
+      const pluginOriginSelect = event.target.closest("[data-plugin-origin-select]");
+      if (pluginOriginSelect) {
+        const next = pluginOriginSelect.value || "all";
+        state.pluginHub.origin = ["all", "builtin", "claw"].includes(next) ? next : "all";
+        render();
+      }
+
+      const pluginMarketSourceSelect = event.target.closest("[data-plugin-market-source-select]");
+      if (pluginMarketSourceSelect) {
+        const next = pluginMarketSourceSelect.value || "all";
+        state.pluginHub.marketSource = PLUGIN_MARKETPLACE_SOURCE_FILTERS.some((item) => item.value === next)
+          ? next
+          : "all";
+        render();
+      }
     });
 
     nodes.stream.addEventListener("keydown", (event) => {
@@ -675,6 +1714,23 @@
       if (mineJumpKey && event.key === "Enter") {
         event.preventDefault();
         applySkillMineJump();
+        return;
+      }
+
+      const pluginDialogJump = event.target.closest("[data-plugin-dialog-jump]");
+      if (pluginDialogJump && event.key === "Enter") {
+        event.preventDefault();
+        applyPluginDialogJump();
+        return;
+      }
+
+      const pluginMarketCardKey = event.target.closest("[data-plugin-market-card]");
+      if (pluginMarketCardKey && (event.key === "Enter" || event.key === " ")) {
+        if (event.target.closest("button, input, select, textarea")) return;
+        event.preventDefault();
+        const id = pluginMarketCardKey.getAttribute("data-plugin-market-card") || "";
+        const item = PLUGIN_MARKETPLACE_ITEMS.find((row) => row.id === id);
+        if (item) showSkillPlazaToast(`查看组件「${item.name}」（演示）`);
         return;
       }
 
@@ -820,6 +1876,33 @@
       });
     }
 
+    if (nodes.composerAgentButton) {
+      nodes.composerAgentButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        state.enterprise.agentSelectorOpen = !state.enterprise.agentSelectorOpen;
+        renderComposerAgentSelector();
+      });
+    }
+
+    if (nodes.composerAgentMenu) {
+      nodes.composerAgentMenu.addEventListener("click", (event) => {
+        const option = event.target.closest("[data-composer-agent-select]");
+        if (option) {
+          event.preventDefault();
+          selectSummonedEnterpriseAgent(option.getAttribute("data-composer-agent-select") || "");
+          return;
+        }
+
+        if (event.target.closest("#composerAgentSummonOther")) {
+          event.preventDefault();
+          state.enterprise.agentSelectorOpen = false;
+          renderComposerAgentSelector();
+          navigate("agents");
+        }
+      });
+    }
+
     if (nodes.composerProgressToggle) {
       nodes.composerProgressToggle.addEventListener("click", (event) => {
         event.preventDefault();
@@ -892,6 +1975,13 @@
       if (event.target.closest("#sendModeWrap")) return;
       state.runtimeSend.menuOpen = false;
       renderRuntimeSendControls();
+    });
+
+    document.addEventListener("mousedown", (event) => {
+      if (!state.enterprise.agentSelectorOpen) return;
+      if (event.target.closest("#composerAgentWrap")) return;
+      state.enterprise.agentSelectorOpen = false;
+      renderComposerAgentSelector();
     });
 
     document.addEventListener("mousedown", (event) => {
@@ -990,7 +2080,15 @@
   }
 
   function isStandaloneRoute(route = state.route) {
-    return route === "agents" || route === "automation" || route === "skillhub" || route === "product";
+    return (
+      route === "agents" ||
+      route === "automation" ||
+      route === "skillhub" ||
+      route === "plugins" ||
+      route === "product" ||
+      route === "clawconfig" ||
+      route === "files"
+    );
   }
 
   function hydrateRouteFromHash() {
@@ -1001,8 +2099,14 @@
       state.route = "automation";
     } else if (hash === "skillhub") {
       state.route = "skillhub";
+    } else if (hash === "plugins") {
+      state.route = "plugins";
     } else if (hash === "product") {
       state.route = "product";
+    } else if (hash === "clawconfig") {
+      state.route = "clawconfig";
+    } else if (hash === "files") {
+      state.route = "files";
     } else {
       state.route = "chat";
     }
@@ -1058,6 +2162,38 @@
     </li>`;
   }
 
+  function getSkillPickerAnchor() {
+    return nodes.composerTextarea?.closest(".composer-input-wrap") || nodes.composerTextarea;
+  }
+
+  function positionSkillPicker() {
+    if (!nodes.skillPicker || nodes.skillPicker.hidden) return;
+    const anchor = getSkillPickerAnchor();
+    if (!anchor) return;
+
+    const picker = nodes.skillPicker;
+    const margin = 4;
+    const pad = 8;
+    const maxWidth = Math.min(230, window.innerWidth - pad * 2);
+    const r = anchor.getBoundingClientRect();
+
+    picker.style.width = `${Math.round(maxWidth)}px`;
+    picker.style.left = `${Math.round(Math.min(Math.max(pad, r.left), window.innerWidth - maxWidth - pad))}px`;
+    picker.style.visibility = "hidden";
+    picker.style.top = "0";
+
+    const ph = picker.offsetHeight;
+    const spaceBelow = window.innerHeight - r.bottom - margin;
+    const spaceAbove = r.top - margin;
+    const openAbove = spaceBelow < ph && spaceAbove > spaceBelow;
+
+    let top = openAbove ? r.top - ph - margin : r.bottom + margin;
+    top = Math.max(pad, Math.min(top, window.innerHeight - ph - pad));
+    picker.style.top = `${Math.round(top)}px`;
+    picker.style.visibility = "";
+    picker.classList.toggle("is-above", openAbove);
+  }
+
   function renderSkillPickerList() {
     const items = getVisibleSkills();
     if (nodes.skillPickerHint) {
@@ -1074,6 +2210,7 @@
     if (nodes.skillPickerBtn) nodes.skillPickerBtn.setAttribute("aria-expanded", "true");
     requestAnimationFrame(() => {
       if (!skillUI.open) return;
+      positionSkillPicker();
       alignDetailTooltipToActive();
     });
   }
@@ -1126,27 +2263,36 @@
 
   function applySkillInsert(skillId) {
     const el = nodes.composerTextarea;
-    const val = el.value;
-    const end = el.selectionEnd;
-    const ins = `/${skillId} `;
     if (skillUI.fromSlash && skillUI.slashStart >= 0) {
+      const val = el.value;
       const start = skillUI.slashStart;
-      const before = val.slice(0, start);
-      const after = val.slice(end);
-      el.value = before + ins + after;
-      el.selectionStart = el.selectionEnd = (before + ins).length;
-    } else if (skillUI.buttonMode) {
-      const p = el.selectionStart;
-      const a = val.slice(0, p);
-      const b = val.slice(p);
-      const gap = a.length > 0 && !/\s$/.test(a) ? " " : "";
-      el.value = a + gap + ins + b;
-      el.selectionStart = el.selectionEnd = a.length + gap.length + ins.length;
-    } else {
+      const end = el.selectionEnd;
+      el.value = val.slice(0, start) + val.slice(end);
+      el.selectionStart = el.selectionEnd = start;
+    } else if (!skillUI.buttonMode) {
       return;
     }
+
+    if (!state.composer.skills.includes(skillId)) {
+      state.composer.skills.push(skillId);
+    }
+    renderComposerSkillChips();
+    syncEnterpriseDraftQueryFromComposer();
+    updateComposerSendButton();
     closeSkillPicker();
     el.focus();
+  }
+
+  function initComposerSkills() {
+    if (!nodes.composerSkillChips) return;
+    nodes.composerSkillChips.addEventListener("click", (event) => {
+      const removeButton = event.target.closest("[data-composer-skill-remove]");
+      if (!removeButton) return;
+      event.preventDefault();
+      event.stopPropagation();
+      removeComposerSkill(removeButton.getAttribute("data-composer-skill-remove") || "");
+    });
+    renderComposerSkillChips();
   }
 
   function hideDetailTooltip() {
@@ -1293,6 +2439,9 @@
       });
     }
     window.addEventListener("scroll", () => hideDetailTooltip(), true);
+    window.addEventListener("resize", () => {
+      if (skillUI.open) positionSkillPicker();
+    });
 
     document.addEventListener("mousedown", (e) => {
       if (!skillUI.open) return;
@@ -1309,15 +2458,22 @@
           ? "automation"
           : route === "skillhub"
             ? "skillhub"
-            : route === "product"
-              ? "product"
-              : "chat";
+            : route === "plugins"
+              ? "plugins"
+              : route === "product"
+                ? "product"
+              : route === "clawconfig"
+                ? "clawconfig"
+                : route === "files"
+                  ? "files"
+                  : "chat";
     if (window.location.hash !== `#${nextRoute}`) {
       window.location.hash = nextRoute;
     }
     state.route = nextRoute;
     if (isStandaloneRoute()) {
       stopEnterpriseRunTimer();
+      state.enterprise.agentSelectorOpen = false;
       render();
       return;
     }
@@ -1328,17 +2484,14 @@
       state.enterprise.activeSessionId = active.id;
       const session = getEnterpriseSession(active.id);
       if (session) {
-        nodes.composerTextarea.value = "";
+        clearComposerDraft();
         if (session.status === "running" && session.phase < 6) {
           startEnterpriseRun(active.id);
         }
       }
-    } else if (state.enterprise.draftAgentId) {
-      state.chatMode = "enterprise_draft";
-      const draftAgent = getEnterpriseDraftAgent();
-      nodes.composerTextarea.value = state.enterprise.query || getDefaultEnterprisePrompt(draftAgent);
     } else {
       state.chatMode = "expense";
+      state.enterprise.activeSessionId = "";
     }
     render();
   }
@@ -1356,7 +2509,53 @@
   }
 
   function getEnterpriseAgentById(agentId) {
-    return enterpriseAgents.find((agent) => agent.id === agentId) || null;
+    return enterpriseAgentCatalog.find((agent) => agent.id === agentId) || null;
+  }
+
+  function isEnterpriseAgentFavorite(agent) {
+    const base = Boolean(agent.isFavorite);
+    return state.enterpriseFavoriteOverrides[agent.id] !== undefined
+      ? state.enterpriseFavoriteOverrides[agent.id]
+      : base;
+  }
+
+  function toggleEnterpriseAgentFavorite(agentId) {
+    const agent = getEnterpriseAgentById(agentId);
+    if (!agent) return;
+    const next = !isEnterpriseAgentFavorite(agent);
+    state.enterpriseFavoriteOverrides[agentId] = next;
+    showSkillPlazaToast(next ? `已收藏「${agent.name}」` : `已取消收藏「${agent.name}」`);
+    render();
+  }
+
+  function filterEnterpriseAgentList() {
+    const query = state.enterprise.query.trim().toLowerCase();
+    const categoryId = state.enterprise.category || "all";
+    const sourceScope = state.enterprise.sourceScope || "all";
+    const sort = state.enterprise.sort || "latest";
+
+    let list = enterpriseAgentCatalog.filter((agent) => {
+      if (sourceScope === "favorite" && !isEnterpriseAgentFavorite(agent)) return false;
+      if (sourceScope === "org" && agent.sourceType !== "org") return false;
+      if (categoryId !== "all" && agent.category !== categoryId) return false;
+      if (!query) return true;
+      const blob = `${agent.name}${agent.description}`.toLowerCase();
+      return blob.includes(query);
+    });
+
+    list = [...list].sort((left, right) => {
+      if (sort === "hot") {
+        return right.usageCount - left.usageCount;
+      }
+      return String(right.publishedAt).localeCompare(String(left.publishedAt));
+    });
+
+    return list;
+  }
+
+  function formatEnterpriseMetric(value) {
+    const n = Number(value) || 0;
+    return n >= 10000 ? `${(n / 10000).toFixed(1)}万` : n.toLocaleString("zh-CN");
   }
 
   function getEnterprisePreset(agent) {
@@ -1373,33 +2572,18 @@
   }
 
   function openEnterpriseDraft(agentId) {
-    const agent = getEnterpriseAgentById(agentId);
-    if (!agent) return;
-    state.ui.workflowPaused = false;
-    stopEnterpriseRunTimer();
-    state.route = "chat";
-    state.chatMode = "enterprise_draft";
-    state.enterprise.draftAgentId = agent.id;
-    state.enterprise.activeSessionId = "";
-    state.enterprise.query = getDefaultEnterprisePrompt(agent);
-    state.sessions = state.sessions.map((task) => ({ ...task, active: false }));
-    nodes.composerTextarea.value = state.enterprise.query;
-    render();
-    window.requestAnimationFrame(() => {
-      nodes.composerTextarea.focus();
-      nodes.composerTextarea.setSelectionRange(nodes.composerTextarea.value.length, nodes.composerTextarea.value.length);
-    });
+    summonEnterpriseAgent(agentId);
   }
 
   function syncEnterpriseDraftQueryFromComposer() {
     if (state.chatMode !== "enterprise_draft") return;
-    state.enterprise.query = nodes.composerTextarea.value || "";
+    state.enterprise.query = getComposerDraftText();
   }
 
   function canSubmitEnterpriseChat() {
     if (state.route !== "chat") return false;
     if (state.chatMode !== "enterprise_draft" && state.chatMode !== "enterprise_session") return false;
-    const value = (nodes.composerTextarea.value || "").trim();
+    const value = getComposerDraftText();
     if (!value) return false;
     if (state.chatMode === "enterprise_draft") return Boolean(getEnterpriseDraftAgent());
     const session = getEnterpriseSession(state.enterprise.activeSessionId);
@@ -1431,7 +2615,7 @@
     }
 
     if (!canSubmitEnterpriseChat()) return;
-    const message = (nodes.composerTextarea.value || "").trim();
+    const message = getComposerDraftText();
     const baseAgent =
       state.chatMode === "enterprise_session"
         ? getEnterpriseAgentById(getEnterpriseSession(state.enterprise.activeSessionId)?.agentId)
@@ -1476,7 +2660,7 @@
       ...state.sessions.map((task) => ({ ...task, active: false }))
     ];
 
-    nodes.composerTextarea.value = "";
+    clearComposerDraft();
     render();
     startEnterpriseRun(sessionId);
   }
@@ -1734,6 +2918,7 @@
     renderRecentTasks();
     renderMessages();
     renderRightPanel();
+    renderComposerAgentSelector();
     renderComposerProgressDock();
     renderRuntimeQueueDock();
     updateComposerSendButton();
@@ -1744,10 +2929,14 @@
     nodes.appShell.classList.toggle("route-agents", state.route === "agents");
     nodes.appShell.classList.toggle("route-automation", state.route === "automation");
     nodes.appShell.classList.toggle("route-skillhub", state.route === "skillhub");
+    nodes.appShell.classList.toggle("route-plugins", state.route === "plugins");
     nodes.appShell.classList.toggle("route-product", state.route === "product");
+    nodes.appShell.classList.toggle("route-clawconfig", state.route === "clawconfig");
+    nodes.appShell.classList.toggle("route-files", state.route === "files");
     nodes.appShell.classList.toggle("route-chat", state.route === "chat");
     nodes.appShell.classList.toggle("preview-focused", state.panel.activeTab === "preview");
     const shellPanelsHidden = isStandaloneRoute();
+    if (shellPanelsHidden) state.enterprise.agentSelectorOpen = false;
     nodes.composerCard.hidden = shellPanelsHidden;
     if (nodes.composerProgressDock) nodes.composerProgressDock.hidden = shellPanelsHidden || !shouldShowComposerProgressDock();
     if (nodes.runtimeQueueDock && shellPanelsHidden) nodes.runtimeQueueDock.hidden = true;
@@ -1868,7 +3057,7 @@
       <div class="session-group-header">
         <div class="session-group-title">
           ${icon("clock")}
-          <span>自动化任务</span>
+          <span>自动输任务执行</span>
         </div>
         <div class="session-group-actions">
           ${tasks.length ? `<span class="session-group-meta">${escapeHTML(String(tasks.length))}</span>` : ""}
@@ -2043,8 +3232,90 @@
     if (idx >= 0) arr[idx] = entry;
     else arr.push(entry);
     state.skillHubTab = "mine";
-    showSkillPlazaToast(`已添加「${skill.name}」至我的 Claw`);
+    showSkillPlazaToast(`已添加「${skill.name}」至我的技能`);
     render();
+  }
+
+  function isPlazaSkillInMine(plazaId) {
+    const mineId = `from-plaza-${plazaId}`;
+    if (state.skillMine.deletedIds[mineId]) return false;
+    return state.skillMine.importedFromPlaza.some((item) => item.id === mineId);
+  }
+
+  function removePlazaSkillFromMine(plazaId) {
+    const mineId = `from-plaza-${plazaId}`;
+    const idx = state.skillMine.importedFromPlaza.findIndex((item) => item.id === mineId);
+    if (idx >= 0) state.skillMine.importedFromPlaza.splice(idx, 1);
+    state.skillMine.deletedIds[mineId] = true;
+    delete state.skillMine.enabledOverrides[mineId];
+  }
+
+  function openSkillConfigDialog() {
+    state.skillMine.configDialogOpen = true;
+    state.skillMine.configDialogPage = 1;
+  }
+
+  function closeSkillConfigDialog() {
+    state.skillMine.configDialogOpen = false;
+    state.skillMine.configDialogQuery = "";
+    state.skillMine.configDialogSource = "all";
+    state.skillMine.configDialogPage = 1;
+    state.skillMine.configDialogPageSize = 10;
+    state.skillMine.configDialogJumpInput = "";
+  }
+
+  function getSkillConfigCategoryTags(skill) {
+    const primary = getSkillPlazaAudienceBadgeLabel(skill);
+    const secondary = skill.category || (skill.tags && skill.tags[0]) || "";
+    return [primary, secondary].filter((tag, index, arr) => tag && arr.indexOf(tag) === index).slice(0, 2);
+  }
+
+  function getSkillConfigUpdatedAt(skill) {
+    return plazaPublishedAtToMineUpdatedAt(skill.publishedAt) || skill.publishedAt || "—";
+  }
+
+  function filterSkillConfigDialogOptions() {
+    const q = state.skillMine.configDialogQuery.trim().toLowerCase();
+    const src = state.skillMine.configDialogSource;
+    return skillPlazaSkills.filter((skill) => {
+      const matchesSource =
+        src === "all" ? true : src === "favorite" ? isSkillPlazaFavorite(skill) : skill.sourceType === src;
+      if (!matchesSource) return false;
+      if (!q) return true;
+      const blob = [skill.name, skill.description, skill.category, ...(skill.tags || [])].join(" ").toLowerCase();
+      return blob.includes(q);
+    });
+  }
+
+  function getSkillConfigDialogTotalPages() {
+    return Math.max(1, Math.ceil(filterSkillConfigDialogOptions().length / state.skillMine.configDialogPageSize));
+  }
+
+  function applySkillConfigDialogJump() {
+    const n = Number.parseInt(String(state.skillMine.configDialogJumpInput || "").trim(), 10);
+    if (Number.isNaN(n) || n < 1) {
+      showSkillPlazaToast("请输入有效页码。");
+      return;
+    }
+    const totalPages = getSkillConfigDialogTotalPages();
+    state.skillMine.configDialogPage = Math.min(n, totalPages);
+    state.skillMine.configDialogJumpInput = String(state.skillMine.configDialogPage);
+    render();
+  }
+
+  function toggleSkillConfigSelection(plazaId) {
+    const skill = skillPlazaSkills.find((s) => s.id === plazaId);
+    if (!skill) return;
+    if (isPlazaSkillInMine(plazaId)) {
+      removePlazaSkillFromMine(plazaId);
+      showSkillPlazaToast(`已移除「${skill.name}」`);
+    } else {
+      addPlazaSkillToMine(plazaId);
+    }
+  }
+
+  function getSkillConfigSelectedSkills() {
+    return skillPlazaSkills.filter((skill) => isPlazaSkillInMine(skill.id));
   }
 
   function filterSkillMineList() {
@@ -2335,7 +3606,7 @@
         </label>
         <div class="skill-mine-toolbar-right">
           <button type="button" class="skill-mine-ico-btn" data-skill-mine-refresh title="刷新列表" aria-label="刷新列表">${icon("refresh")}</button>
-          <button type="button" class="skill-mine-import" data-skill-mine-import style="background:${CLAW_PRIMARY}">${icon("upload")}<span>导入</span></button>
+          <button type="button" class="skill-mine-config" data-skill-mine-config-open style="background:${CLAW_PRIMARY}">${icon("plus")}<span>配置</span></button>
         </div>
       </div>
       <div class="skill-mine-scroll skill-mine-scroll--v2">${listBlock}</div>
@@ -2357,6 +3628,710 @@
     </div>`;
   }
 
+  function renderSkillConfigDialog() {
+    if (!state.skillMine.configDialogOpen) return "";
+    const sm = state.skillMine;
+    const filtered = filterSkillConfigDialogOptions();
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / sm.configDialogPageSize));
+    if (sm.configDialogPage > totalPages) sm.configDialogPage = totalPages;
+    if (sm.configDialogPage < 1) sm.configDialogPage = 1;
+    const safePage = sm.configDialogPage;
+    const start = (safePage - 1) * sm.configDialogPageSize;
+    const pageItems = filtered.slice(start, start + sm.configDialogPageSize);
+    const pages = getMineVisiblePageIndices(safePage, totalPages);
+    const selected = getSkillConfigSelectedSkills();
+    const chipVisible = selected.slice(0, 4);
+    const chipOverflow = selected.length - chipVisible.length;
+    const chipsHtml = selected.length
+      ? `<div class="skill-config-selected">
+          <span class="skill-config-selected-label">已选择(${selected.length})</span>
+          <div class="skill-config-chips">
+            ${chipVisible
+              .map(
+                (skill) =>
+                  `<span class="skill-config-chip">${escapeHTML(skill.name)}<button type="button" class="skill-config-chip-remove" data-skill-config-chip-remove="${escapeAttr(skill.id)}" aria-label="移除 ${escapeAttr(skill.name)}">${icon("x")}</button></span>`
+              )
+              .join("")}
+            ${chipOverflow > 0 ? `<span class="skill-config-chip skill-config-chip--more">+${chipOverflow}</span>` : ""}
+          </div>
+        </div>`
+      : "";
+    const sourceOptions = skillPlazaSourceFilters
+      .map((f) => {
+        const label = f.value === "all" ? "全部来源" : f.label;
+        return `<option value="${escapeAttr(f.value)}"${sm.configDialogSource === f.value ? " selected" : ""}>${escapeHTML(label)}</option>`;
+      })
+      .join("");
+    const rows = pageItems.length
+      ? pageItems
+          .map((skill) => {
+            const selectedRow = isPlazaSkillInMine(skill.id);
+            const tags = getSkillConfigCategoryTags(skill);
+            const iconId = getSkillPlazaIconId(skill);
+            return `<li class="skill-config-item">
+              <div class="skill-config-item-main">
+                <span class="skill-config-item-icon" aria-hidden="true"><svg><use href="#${iconId}"></use></svg></span>
+                <div class="skill-config-item-text">
+                  <div class="skill-config-item-title">
+                    <strong>${escapeHTML(skill.name)}</strong>
+                    ${tags.map((tag) => `<span class="skill-config-tag">${escapeHTML(tag)}</span>`).join("")}
+                  </div>
+                  <p class="skill-config-item-desc">${escapeHTML(skill.description || "")}</p>
+                  <p class="skill-config-item-meta">更新时间: ${escapeHTML(getSkillConfigUpdatedAt(skill))}</p>
+                </div>
+              </div>
+              <div class="skill-config-item-actions">
+                <button type="button" class="skill-config-ghost-btn" data-skill-config-view="${escapeAttr(skill.id)}">查看</button>
+                <button type="button" class="${selectedRow ? "skill-config-secondary-btn" : "skill-config-outline-btn"}" data-skill-config-toggle="${escapeAttr(skill.id)}">${selectedRow ? "移除" : "添加"}</button>
+              </div>
+            </li>`;
+          })
+          .join("")
+      : `<div class="skill-config-empty">暂无匹配项，请调整搜索或来源筛选。</div>`;
+    const pageButtons = pages
+      .map((page, idx) => {
+        const prev = idx > 0 ? pages[idx - 1] : undefined;
+        const ell = mineEllipsisBefore(page, prev) ? `<span class="skill-config-page-gap">…</span>` : "";
+        return `${ell}<button type="button" class="skill-config-page-num${safePage === page ? " is-active" : ""}" data-skill-config-page="${page}">${page}</button>`;
+      })
+      .join("");
+    const sizeBtns = [10, 20, 50]
+      .map(
+        (n) =>
+          `<button type="button" class="skill-config-page-size${sm.configDialogPageSize === n ? " is-active" : ""}" data-skill-config-page-size="${n}">${n} 条/页</button>`
+      )
+      .join("");
+
+    return `<div class="skill-config-backdrop" data-skill-config-backdrop>
+      <section class="skill-config-dialog" role="dialog" aria-modal="true" aria-labelledby="skillConfigDialogTitle">
+        <header class="skill-config-head">
+          <h3 id="skillConfigDialogTitle">配置技能</h3>
+          <button type="button" class="skill-config-close" data-skill-config-close aria-label="关闭">${icon("x")}</button>
+        </header>
+        <div class="skill-config-toolbar">
+          <label class="skill-config-search">
+            ${icon("search")}
+            <input type="search" data-skill-config-search value="${escapeAttr(sm.configDialogQuery)}" placeholder="搜索技能名称" autocomplete="off" aria-label="搜索技能名称" />
+          </label>
+          <label class="skill-config-source-wrap">
+            <select class="skill-config-source" data-skill-config-source aria-label="技能来源">${sourceOptions}</select>
+          </label>
+          <div class="skill-config-toolbar-actions">
+            <button type="button" class="skill-config-icon-btn" data-skill-config-refresh title="刷新列表" aria-label="刷新列表">${icon("refresh")}</button>
+            <button type="button" class="skill-config-primary-btn" data-skill-config-create>${icon("plus")}<span>创建技能</span></button>
+          </div>
+        </div>
+        ${chipsHtml}
+        <div class="skill-config-list-wrap"><ul class="skill-config-list">${rows}</ul></div>
+        <footer class="skill-config-foot">
+          <div class="skill-config-pager">
+            <span>共 ${total} 条</span>
+            <button type="button" class="skill-config-icon-btn skill-config-page-arrow" data-skill-config-prev${safePage <= 1 ? " disabled" : ""} aria-label="上一页"><svg class="skill-mine-chevron skill-mine-chevron--prev" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
+            <div class="skill-config-page-nums">${pageButtons}</div>
+            <button type="button" class="skill-config-icon-btn skill-config-page-arrow" data-skill-config-next${safePage >= totalPages ? " disabled" : ""} aria-label="下一页"><svg class="skill-mine-chevron skill-mine-chevron--next" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
+            <div class="skill-config-page-size-group">${sizeBtns}</div>
+            <div class="skill-config-jump">
+              <span>前往</span>
+              <input type="text" inputmode="numeric" data-skill-config-jump value="${escapeAttr(sm.configDialogJumpInput)}" aria-label="前往页码" />
+              <span>页</span>
+              <button type="button" class="skill-config-secondary-btn" data-skill-config-jump-apply>确定</button>
+            </div>
+          </div>
+        </footer>
+      </section>
+    </div>`;
+  }
+
+  function clonePluginTools(source) {
+    return {
+      platform: source.platform.map((item) => ({ ...item })),
+      tenant: source.tenant.map((item) => ({ ...item })),
+      claw: source.claw.map((item) => ({ ...item }))
+    };
+  }
+
+  function formatPluginUpdatedAtLabel(index) {
+    const d = 1 + (index % 28);
+    const h = 9 + (index % 10);
+    const m = (index * 7) % 60;
+    return `更新时间: 2026-04-${String(d).padStart(2, "0")} ${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:00`;
+  }
+
+  function formatPluginAddedAt(date = new Date()) {
+    const pad = (n) => String(n).padStart(2, "0");
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  }
+
+  function getPluginToolRows() {
+    const tools = state.pluginHub.tools;
+    const rows = [
+      ...tools.platform.map((item) => ({ item, scope: "platform" })),
+      ...tools.tenant.map((item) => ({ item, scope: "tenant" })),
+      ...tools.claw.map((item) => ({ item, scope: "claw" }))
+    ];
+    return rows
+      .map((row, index) => ({ ...row, index }))
+      .sort((a, b) => (b.item.addedOrder || 0) - (a.item.addedOrder || 0) || a.index - b.index)
+      .map(({ index, ...row }) => row);
+  }
+
+  function resolvePluginToolKind(item) {
+    if (item.kind && PLUGIN_TOOL_KIND_META[item.kind]) return item.kind;
+    const raw = `${item.meta || ""} ${item.badge || ""} ${item.name || ""}`.toLowerCase();
+    if (raw.includes("工作流") || raw.includes("workflow")) return "workflow";
+    if (raw.includes("openapi") || raw.includes("插件")) return "plugin";
+    if (raw.includes("本体")) return "ontology_action";
+    if (raw.includes("mcp") || raw.includes("接口")) return "mcp";
+    return "mcp";
+  }
+
+  function getPluginToolOrigin(scope) {
+    return scope === "claw" ? "claw" : "builtin";
+  }
+
+  function getPluginToolKindTabs(rows = getPluginToolRows()) {
+    return PLUGIN_TOOL_KIND_ORDER.map((kind) => ({
+      kind,
+      count: rows.filter(({ item }) => resolvePluginToolKind(item) === kind).length
+    }));
+  }
+
+  function filterPluginToolRows() {
+    const q = state.pluginHub.query.trim().toLowerCase();
+    const origin = state.pluginHub.origin;
+    const kind = state.pluginHub.kind;
+    return getPluginToolRows().filter(({ item, scope }) => {
+      if (resolvePluginToolKind(item) !== kind) return false;
+      if (origin !== "all" && getPluginToolOrigin(scope) !== origin) return false;
+      if (!q) return true;
+      return [item.name, item.description || ""].join(" ").toLowerCase().includes(q);
+    });
+  }
+
+  function setAllPluginToolsEnabled(enabled) {
+    Object.values(state.pluginHub.tools).forEach((items) => {
+      items.forEach((item) => {
+        item.enabled = enabled;
+      });
+    });
+  }
+
+  function togglePluginTool(scope, id) {
+    const list = state.pluginHub.tools[scope];
+    if (!Array.isArray(list)) return;
+    const item = list.find((row) => row.id === id);
+    if (!item) return;
+    item.enabled = !item.enabled;
+  }
+
+  function deletePluginTool(scope, id) {
+    const list = state.pluginHub.tools[scope];
+    if (!Array.isArray(list) || scope !== "claw") return "";
+    const idx = list.findIndex((item) => item.id === id);
+    if (idx < 0) return "";
+    const [removed] = list.splice(idx, 1);
+    return removed?.name || "";
+  }
+
+  function openPluginConfigDialog() {
+    state.pluginHub.dialogOpen = true;
+  }
+
+  function closePluginConfigDialog() {
+    state.pluginHub.dialogOpen = false;
+    state.pluginHub.dialogKind = "mcp";
+    state.pluginHub.dialogQuery = "";
+    state.pluginHub.dialogSelectedIds = [];
+    state.pluginHub.dialogPage = 1;
+    state.pluginHub.dialogPageSize = 10;
+    state.pluginHub.dialogJumpInput = "";
+  }
+
+  function findPluginConfigOption(id) {
+    return ALL_PLUGIN_CONFIG_OPTIONS.find((item) => item.id === id) || null;
+  }
+
+  function togglePluginDialogSelection(id) {
+    if (!findPluginConfigOption(id)) return;
+    const selected = state.pluginHub.dialogSelectedIds;
+    const idx = selected.indexOf(id);
+    if (idx >= 0) selected.splice(idx, 1);
+    else selected.push(id);
+  }
+
+  function getFilteredPluginDialogOptions() {
+    const q = state.pluginHub.dialogQuery.trim().toLowerCase();
+    const kind = state.pluginHub.dialogKind;
+    return ALL_PLUGIN_CONFIG_OPTIONS.filter((item) => {
+      if (item.kind !== kind) return false;
+      if (!q) return true;
+      return item.name.toLowerCase().includes(q);
+    });
+  }
+
+  function getPluginDialogTotalPages() {
+    return Math.max(1, Math.ceil(getFilteredPluginDialogOptions().length / state.pluginHub.dialogPageSize));
+  }
+
+  function getPluginVisiblePageIndices(current, total) {
+    if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+    const pages = new Set([1, total]);
+    for (let p = current - 2; p <= current + 2; p += 1) {
+      if (p >= 1 && p <= total) pages.add(p);
+    }
+    return [...pages].sort((a, b) => a - b);
+  }
+
+  function pluginEllipsisBefore(page, prev) {
+    return prev !== undefined && page - prev > 1;
+  }
+
+  function applyPluginDialogJump() {
+    const n = Number.parseInt(String(state.pluginHub.dialogJumpInput || "").trim(), 10);
+    if (Number.isNaN(n) || n < 1) {
+      showSkillPlazaToast("请输入有效页码。");
+      return;
+    }
+    const totalPages = getPluginDialogTotalPages();
+    state.pluginHub.dialogPage = Math.min(n, totalPages);
+    state.pluginHub.dialogJumpInput = String(state.pluginHub.dialogPage);
+    render();
+  }
+
+  function confirmPluginConfigSelections() {
+    const existing = new Set(getPluginToolRows().map(({ item }) => item.id));
+    let added = 0;
+    state.pluginHub.dialogSelectedIds.forEach((id) => {
+      if (existing.has(id)) return;
+      const option = findPluginConfigOption(id);
+      if (!option) return;
+      const addedOrder = state.pluginHub.marketAddSequence + 1;
+      const addedAt = formatPluginAddedAt();
+      state.pluginHub.marketAddSequence = addedOrder;
+      state.pluginHub.tools.claw.push({
+        id: option.id,
+        name: option.name,
+        description: option.description,
+        enabled: true,
+        badge: "Claw配置",
+        meta: PLUGIN_TOOL_KIND_META[option.kind]?.label || option.badge,
+        kind: option.kind,
+        origin: "claw_only",
+        updatedAt: addedAt,
+        addedAt,
+        addedOrder
+      });
+      existing.add(id);
+      added += 1;
+    });
+    return added;
+  }
+
+  function findPluginMarketplaceItem(id) {
+    return PLUGIN_MARKETPLACE_ITEMS.find((item) => item.id === id) || null;
+  }
+
+  function addPluginMarketplaceItemToMine(id) {
+    const marketItem = findPluginMarketplaceItem(id);
+    if (!marketItem) return null;
+    const kind = marketItem.kind === "mcp" ? "mcp" : "plugin";
+    const addedOrder = state.pluginHub.marketAddSequence + 1;
+    const addedAt = formatPluginAddedAt();
+    state.pluginHub.marketAddSequence = addedOrder;
+    const existing = state.pluginHub.tools.claw.find((item) => item.marketplaceId === id || item.id === id);
+    const next = {
+      id: marketItem.id,
+      marketplaceId: marketItem.id,
+      name: marketItem.name,
+      description: marketItem.description || `${marketItem.name}组件，来自插件广场。`,
+      enabled: true,
+      badge: "插件广场",
+      meta: getPluginMarketplaceKindLabel(kind),
+      kind,
+      creator: marketItem.author.replace(/^@/, ""),
+      origin: "marketplace",
+      updatedAt: addedAt,
+      addedAt,
+      addedOrder
+    };
+    if (existing) {
+      Object.assign(existing, next);
+    } else {
+      state.pluginHub.tools.claw.push(next);
+    }
+    state.pluginHub.kind = kind;
+    state.pluginHub.origin = "claw";
+    state.pluginHub.query = "";
+    return next;
+  }
+
+  function getPluginMarketplaceCategoryLabel(value) {
+    return PLUGIN_MARKETPLACE_CATEGORY_FILTERS.find((item) => item.value === value)?.label || "其他";
+  }
+
+  function getPluginMarketplaceKindLabel(kind) {
+    return kind === "mcp" ? "MCP" : "插件";
+  }
+
+  function filterPluginMarketplaceItems() {
+    const ph = state.pluginHub;
+    const q = ph.marketQuery.trim().toLowerCase();
+    return PLUGIN_MARKETPLACE_ITEMS.filter((item) => {
+      if (ph.marketSource !== "all" && item.source !== ph.marketSource) return false;
+      if (ph.marketCategory !== "all" && item.category !== ph.marketCategory) return false;
+      if (!q) return true;
+      return [
+        item.name,
+        item.author,
+        item.description,
+        getPluginMarketplaceKindLabel(item.kind),
+        getPluginMarketplaceCategoryLabel(item.category)
+      ]
+        .join(" ")
+        .toLowerCase()
+        .includes(q);
+    });
+  }
+
+  function renderPluginMarketplaceCard(item) {
+    const kind = item.kind === "mcp" ? "mcp" : "plugin";
+    const category = getPluginMarketplaceCategoryLabel(item.category);
+    const desc = item.description
+      ? `<p class="plugin-market-desc">${escapeHTML(item.description)}</p>`
+      : `<p class="plugin-market-desc is-empty" aria-hidden="true"></p>`;
+    return `<article class="plugin-market-card is-${escapeAttr(kind)}" role="button" tabindex="0" data-plugin-market-card="${escapeAttr(item.id)}">
+      <span class="plugin-market-type plugin-market-type--${escapeAttr(kind)}">${escapeHTML(getPluginMarketplaceKindLabel(kind))}</span>
+      <div class="plugin-market-head">
+        <span class="plugin-market-thumb plugin-market-thumb--${escapeAttr(item.tone || "orange")}">${icon(item.icon || "tool")}</span>
+        <div class="plugin-market-meta">
+          <h3 class="plugin-market-name">${escapeHTML(item.name)}</h3>
+          <div class="plugin-market-author">${escapeHTML(item.author)}</div>
+        </div>
+      </div>
+      ${desc}
+      <div class="plugin-market-foot">
+        <span class="plugin-market-category">${escapeHTML(category)}</span>
+        <button type="button" class="plugin-market-add" data-plugin-market-add="${escapeAttr(item.id)}" title="添加到我的插件" aria-label="添加到我的插件">${icon("plus")}</button>
+      </div>
+    </article>`;
+  }
+
+  function renderPluginMarketplaceFilterRow(kind, filters, activeValue) {
+    const [allFilter, ...rest] = filters;
+    return `<div class="plugin-market-filter-row">
+      <button type="button" class="plugin-market-filter-label${activeValue === allFilter.value ? " is-active" : ""}" data-plugin-market-${kind}="${escapeAttr(allFilter.value)}">${escapeHTML(allFilter.label)}</button>
+      <div class="plugin-market-filter-options">
+        ${rest
+          .map(
+            (item) =>
+              `<button type="button" class="plugin-market-filter-chip${activeValue === item.value ? " is-active" : ""}" data-plugin-market-${kind}="${escapeAttr(item.value)}">${escapeHTML(item.label)}</button>`
+          )
+          .join("")}
+      </div>
+    </div>`;
+  }
+
+  function renderPluginMarketplacePanel() {
+    const ph = state.pluginHub;
+    const filtered = filterPluginMarketplaceItems();
+    const sourceOptions = PLUGIN_MARKETPLACE_SOURCE_FILTERS.map(
+      (item) =>
+        `<option value="${escapeAttr(item.value)}"${ph.marketSource === item.value ? " selected" : ""}>${escapeHTML(item.label)}</option>`
+    ).join("");
+    const grid = filtered.length
+      ? `<div class="plugin-market-grid">${filtered.map(renderPluginMarketplaceCard).join("")}</div>`
+      : `<div class="plugin-empty plugin-market-empty">暂无匹配组件，请调整搜索或筛选条件。</div>`;
+    return `<section class="plugin-market-panel" aria-label="插件广场">
+      <div class="plugin-market-toolbar">
+        <div class="plugin-market-controls">
+          <label class="plugin-market-search">
+            <input type="search" data-plugin-market-search value="${escapeAttr(ph.marketQuery)}" placeholder="搜索组件" autocomplete="off" aria-label="搜索组件" />
+            ${icon("search")}
+          </label>
+          <label class="plugin-market-select-wrap" aria-label="组件范围">
+            <select class="plugin-market-select" data-plugin-market-source-select>${sourceOptions}</select>
+            ${icon("chevron")}
+          </label>
+        </div>
+        <div class="plugin-market-actions">
+          <button type="button" class="plugin-market-secondary-action" data-plugin-market-action="publish">上架组件</button>
+          <button type="button" class="plugin-market-primary-action" data-plugin-market-action="create">创建组件${icon("chevron")}</button>
+        </div>
+      </div>
+      <div class="plugin-market-filters">
+        ${renderPluginMarketplaceFilterRow("source", PLUGIN_MARKETPLACE_SOURCE_FILTERS, ph.marketSource)}
+        ${renderPluginMarketplaceFilterRow("category", PLUGIN_MARKETPLACE_CATEGORY_FILTERS, ph.marketCategory)}
+      </div>
+      ${grid}
+    </section>`;
+  }
+
+  function renderPluginKindTabs(tabs) {
+    return `<div class="plugin-kind-tabs">
+      ${tabs
+        .map(({ kind, count }) => {
+          const meta = PLUGIN_TOOL_KIND_META[kind];
+          const active = state.pluginHub.kind === kind;
+          return `<button type="button" class="plugin-kind-tab${active ? " is-active" : ""}" data-plugin-kind="${escapeAttr(kind)}">
+            <span>${escapeHTML(meta.label)} (${count})</span>
+          </button>`;
+        })
+        .join("")}
+    </div>`;
+  }
+
+  function renderPluginOriginBadge(scope) {
+    const builtin = getPluginToolOrigin(scope) === "builtin";
+    return `<span class="plugin-origin-badge ${builtin ? "is-builtin" : "is-claw"}">${builtin ? "内置" : "Claw配置"}</span>`;
+  }
+
+  function renderPluginToolKindCell(item) {
+    const kind = resolvePluginToolKind(item);
+    const meta = PLUGIN_TOOL_KIND_META[kind];
+    return `<span class="plugin-kind-cell">${icon(meta.icon)}<span>${escapeHTML(meta.label)}</span></span>`;
+  }
+
+  function getPluginToolCreator(item, scope) {
+    if (scope === "claw") return item.creator || "赵六六";
+    if (scope === "tenant") return item.creator || "公共配置";
+    return item.creator || "平台内置";
+  }
+
+  function getPluginToolUpdatedAt(item, index) {
+    if (item.updatedAt) return item.updatedAt;
+    const day = String(1 + (index % 8)).padStart(2, "0");
+    return `2026-04-${day} 20:00:00`;
+  }
+
+  function renderPluginToolRow(row, index) {
+    const { item, scope } = row;
+    const enabled = item.enabled !== false;
+    const canDelete = scope === "claw";
+    return `<tr class="plugin-tool-row">
+      <td>
+        <div class="plugin-name-cell">
+          <span class="plugin-app-icon">${icon("tool")}</span>
+          <strong title="${escapeAttr(item.name)}">${escapeHTML(item.name)}</strong>
+        </div>
+      </td>
+      <td>
+        <button
+          type="button"
+          class="plugin-status-switch${enabled ? " is-on" : ""}"
+          role="switch"
+          aria-checked="${enabled ? "true" : "false"}"
+          aria-label="${escapeAttr(item.name)} 启停"
+          data-plugin-toggle="${escapeAttr(item.id)}"
+          data-plugin-scope="${escapeAttr(scope)}"
+        >
+          <span>${enabled ? "启用" : "停用"}</span>
+          <i aria-hidden="true"></i>
+        </button>
+      </td>
+      <td class="plugin-tool-desc"><div>${escapeHTML(item.description || "")}</div></td>
+      <td class="plugin-creator-cell" title="${escapeAttr(getPluginToolCreator(item, scope))}">${escapeHTML(getPluginToolCreator(item, scope))}</td>
+      <td class="plugin-time-cell">${escapeHTML(getPluginToolUpdatedAt(item, index))}</td>
+      <td>
+        <div class="plugin-row-actions">
+          <button type="button" class="plugin-link-action" data-plugin-view="${escapeAttr(item.id)}">查看</button>
+          ${
+            canDelete
+              ? `<button type="button" class="plugin-link-action" data-plugin-delete="${escapeAttr(item.id)}" data-plugin-scope="${escapeAttr(scope)}">移除</button>`
+              : ""
+          }
+        </div>
+      </td>
+    </tr>`;
+  }
+
+  function renderPluginConfigDialog() {
+    if (!state.pluginHub.dialogOpen) return "";
+    const ph = state.pluginHub;
+    const filtered = getFilteredPluginDialogOptions();
+    const total = filtered.length;
+    const totalPages = Math.max(1, Math.ceil(total / ph.dialogPageSize));
+    if (ph.dialogPage > totalPages) ph.dialogPage = totalPages;
+    if (ph.dialogPage < 1) ph.dialogPage = 1;
+    const safePage = ph.dialogPage;
+    const start = (safePage - 1) * ph.dialogPageSize;
+    const pageItems = filtered.slice(start, start + ph.dialogPageSize);
+    const pages = getPluginVisiblePageIndices(safePage, totalPages);
+    const activeMeta = PLUGIN_TOOL_KIND_META[ph.dialogKind];
+    const tabHtml = PLUGIN_DIALOG_KIND_ORDER.map((kind) => {
+      const active = ph.dialogKind === kind;
+      return `<button type="button" class="plugin-dialog-tab${active ? " is-active" : ""}" data-plugin-dialog-tab="${escapeAttr(kind)}">${escapeHTML(PLUGIN_TOOL_KIND_META[kind].label)}</button>`;
+    }).join("");
+    const rows = pageItems.length
+      ? pageItems
+          .map((item) => {
+            const meta = PLUGIN_TOOL_KIND_META[item.kind];
+            const selected = ph.dialogSelectedIds.includes(item.id);
+            return `<li class="plugin-dialog-item">
+              <div class="plugin-dialog-item-main">
+                <span class="plugin-dialog-kind-icon kind-${escapeAttr(item.kind)}">${icon(meta.icon)}</span>
+                <div class="plugin-dialog-item-text">
+                  <div class="plugin-dialog-item-title">
+                    <strong>${escapeHTML(item.name)}</strong>
+                    <span>${escapeHTML(meta.label)}</span>
+                    <span>${escapeHTML(item.badge)}</span>
+                  </div>
+                  <p>${escapeHTML(item.updatedAtLabel)}</p>
+                </div>
+              </div>
+              <div class="plugin-dialog-actions">
+                <button type="button" class="plugin-secondary-btn" data-plugin-dialog-view="${escapeAttr(item.id)}">查看</button>
+                <button type="button" class="${selected ? "plugin-secondary-btn" : "plugin-outline-primary"}" data-plugin-dialog-select="${escapeAttr(item.id)}">${selected ? "移除" : "添加"}</button>
+              </div>
+            </li>`;
+          })
+          .join("")
+      : `<div class="plugin-dialog-empty">暂无匹配项，请调整搜索条件。</div>`;
+    const pageButtons = pages
+      .map((page, idx) => {
+        const prev = idx > 0 ? pages[idx - 1] : undefined;
+        const ell = pluginEllipsisBefore(page, prev) ? `<span class="plugin-page-gap">…</span>` : "";
+        return `${ell}<button type="button" class="plugin-page-num${safePage === page ? " is-active" : ""}" data-plugin-dialog-page="${page}">${page}</button>`;
+      })
+      .join("");
+    const sizeBtns = [10, 20, 50]
+      .map(
+        (n) =>
+          `<button type="button" class="plugin-page-size${ph.dialogPageSize === n ? " is-active" : ""}" data-plugin-dialog-page-size="${n}">${n} 条/页</button>`
+      )
+      .join("");
+
+    return `<div class="plugin-dialog-backdrop" data-plugin-dialog-backdrop>
+      <section class="plugin-dialog" role="dialog" aria-modal="true" aria-label="添加工具">
+        <header class="plugin-dialog-head">
+          <h3>添加工具</h3>
+          <button type="button" class="plugin-dialog-close" data-plugin-dialog-close aria-label="关闭">${icon("x")}</button>
+        </header>
+        <nav class="plugin-dialog-tabs" aria-label="工具类型">${tabHtml}</nav>
+        <div class="plugin-dialog-toolbar">
+          <label class="plugin-search">
+            ${icon("search")}
+            <input type="search" data-plugin-dialog-search value="${escapeAttr(ph.dialogQuery)}" placeholder="输入名称检索" autocomplete="off" aria-label="按名称检索" />
+          </label>
+          <div class="plugin-dialog-toolbar-actions">
+            <button type="button" class="plugin-icon-btn" data-plugin-dialog-refresh title="刷新列表" aria-label="刷新列表">${icon("refresh")}</button>
+            <button type="button" class="plugin-primary-btn" data-plugin-dialog-create>${icon("plus")}<span>${escapeHTML(activeMeta.createLabel)}</span></button>
+          </div>
+        </div>
+        <div class="plugin-dialog-list-wrap"><ul class="plugin-dialog-list">${rows}</ul></div>
+        <footer class="plugin-dialog-foot">
+          <div class="plugin-dialog-pager">
+            <span>共 ${total} 条</span>
+            <button type="button" class="plugin-icon-btn plugin-page-arrow" data-plugin-dialog-prev${safePage <= 1 ? " disabled" : ""} aria-label="上一页"><svg class="skill-mine-chevron skill-mine-chevron--prev" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
+            <div class="plugin-page-nums">${pageButtons}</div>
+            <button type="button" class="plugin-icon-btn plugin-page-arrow" data-plugin-dialog-next${safePage >= totalPages ? " disabled" : ""} aria-label="下一页"><svg class="skill-mine-chevron skill-mine-chevron--next" aria-hidden="true"><use href="#icon-chevron"></use></svg></button>
+            <div class="plugin-page-size-group">${sizeBtns}</div>
+            <div class="plugin-jump">
+              <span>前往</span>
+              <input type="text" inputmode="numeric" data-plugin-dialog-jump value="${escapeAttr(ph.dialogJumpInput)}" />
+              <span>页</span>
+              <button type="button" class="plugin-secondary-btn" data-plugin-dialog-jump-apply>确定</button>
+            </div>
+          </div>
+          <div class="plugin-dialog-confirm-row">
+            <button type="button" class="plugin-ghost-btn" data-plugin-dialog-close>取消</button>
+            <button type="button" class="plugin-primary-btn" data-plugin-dialog-confirm${ph.dialogSelectedIds.length ? "" : " disabled"}>添加到 Claw配置</button>
+          </div>
+        </footer>
+      </section>
+    </div>`;
+  }
+
+  function renderPluginMinePanel() {
+    const ph = state.pluginHub;
+    const rows = getPluginToolRows();
+    const filtered = filterPluginToolRows();
+    const total = rows.length;
+    const currentKindMeta = PLUGIN_TOOL_KIND_META[ph.kind] || PLUGIN_TOOL_KIND_META.mcp;
+    const activeKindRows = rows.filter(({ item }) => resolvePluginToolKind(item) === ph.kind);
+    const allCount = activeKindRows.length;
+    const builtinCount = activeKindRows.filter(({ scope }) => getPluginToolOrigin(scope) === "builtin").length;
+    const mineCount = activeKindRows.filter(({ scope }) => getPluginToolOrigin(scope) === "claw").length;
+    const sourceTabs = [
+      ["all", `全部 (${allCount})`],
+      ["builtin", `内置 (${builtinCount})`],
+      ["claw", `我的 (${mineCount})`]
+    ]
+      .map(([value, label]) => `<button type="button" class="plugin-source-tab${ph.origin === value ? " is-active" : ""}" data-plugin-origin="${escapeAttr(value)}">${escapeHTML(label)}</button>`)
+      .join("");
+    const table = filtered.length
+      ? `<section class="plugin-table-wrap">
+          <table class="plugin-table">
+            <thead>
+              <tr>
+                <th>名称</th>
+                <th>状态 <span class="plugin-filter-glyph">${icon("filter")}</span></th>
+                <th>描述</th>
+                <th>创建人 <span class="plugin-filter-glyph">${icon("filter")}</span></th>
+                <th>更新时间 <span class="plugin-sort-glyph">↕</span></th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>${filtered.map(renderPluginToolRow).join("")}</tbody>
+          </table>
+        </section>`
+      : `<div class="plugin-empty">${total === 0 ? "当前还没有插件。" : "没有匹配条件的插件。"}</div>`;
+
+    return `<section class="plugin-panel plugin-mine-panel" aria-labelledby="pluginHubPageTitle">
+          <header class="plugin-panel-top">
+            <h1 class="plugin-hub-title" id="pluginHubPageTitle">我的插件</h1>
+          </header>
+          ${renderPluginKindTabs(getPluginToolKindTabs(rows))}
+          <div class="plugin-panel-head">
+            <div class="plugin-toolbar-left">
+              <div class="plugin-source-tabs">${sourceTabs}</div>
+              <label class="plugin-search">
+                <input type="search" data-plugin-search value="${escapeAttr(ph.query)}" placeholder="搜索${escapeAttr(currentKindMeta.label)}名称" autocomplete="off" aria-label="按名称检索插件" />
+                ${icon("search")}
+              </label>
+            </div>
+            <div class="plugin-toolbar-actions">
+              <button type="button" class="plugin-icon-btn" data-plugin-refresh title="刷新列表" aria-label="刷新列表">${icon("refresh")}</button>
+              <button type="button" class="plugin-secondary-btn" data-plugin-enable-all${total === 0 ? " disabled" : ""}>一键启用</button>
+              <button type="button" class="plugin-primary-btn" data-plugin-config-open>${icon("plus")}<span>配置${escapeHTML(currentKindMeta.label)}</span></button>
+            </div>
+          </div>
+          ${table}
+          <footer class="plugin-list-footer">
+            <div class="plugin-list-pager">
+              <span>共${filtered.length}条</span>
+              <button type="button" class="plugin-page-arrow" disabled aria-label="上一页">‹</button>
+              <button type="button" class="plugin-page-num is-active">1</button>
+              <button type="button" class="plugin-page-num">2</button>
+              <button type="button" class="plugin-page-num">3</button>
+              <button type="button" class="plugin-page-num">4</button>
+              <button type="button" class="plugin-page-num">5</button>
+              <span class="plugin-page-gap">...</span>
+              <button type="button" class="plugin-page-num">20</button>
+              <button type="button" class="plugin-page-arrow" aria-label="下一页">›</button>
+              <button type="button" class="plugin-page-size-select">10条/页 <span>⌄</span></button>
+              <span>前往</span>
+              <input class="plugin-footer-jump" type="text" inputmode="numeric" aria-label="前往页码" />
+            </div>
+          </footer>
+        </section>`;
+  }
+
+  function renderPluginHubPage() {
+    const tab = state.pluginHub.tab === "plaza" ? "plaza" : "mine";
+    const body = tab === "plaza" ? renderPluginMarketplacePanel() : renderPluginMinePanel();
+    return `<section class="skill-plaza-root plugin-hub-root skills-hub-cecloud">
+      <div class="plugin-hub-shell">
+        <nav class="plugin-hub-tabs" aria-label="插件中心">
+          <button type="button" class="plugin-hub-tab${tab === "mine" ? " is-active" : ""}" data-plugin-hub-tab="mine">我的插件</button>
+          <button type="button" class="plugin-hub-tab${tab === "plaza" ? " is-active" : ""}" data-plugin-hub-tab="plaza">插件广场</button>
+        </nav>
+        <div class="plugin-hub-body">${body}</div>
+      </div>
+      ${renderPluginConfigDialog()}
+    </section>`;
+  }
+
   function renderSkillHubPage() {
     const tab = state.skillHubTab;
     const body = tab === "plaza" ? renderSkillPlazaPanel() : renderSkillMinePanel();
@@ -2367,11 +4342,12 @@
       </div>
       <div class="skill-hub-shell">
         <nav class="skill-hub-tabs" aria-label="技能中心">
-          <button type="button" class="skill-hub-tab${tab === "plaza" ? " is-active" : ""}" data-skill-hub-tab="plaza">技能广场</button>
           <button type="button" class="skill-hub-tab${tab === "mine" ? " is-active" : ""}" data-skill-hub-tab="mine">我的技能</button>
+          <button type="button" class="skill-hub-tab${tab === "plaza" ? " is-active" : ""}" data-skill-hub-tab="plaza">技能广场</button>
         </nav>
         <div class="skill-hub-body">${body}</div>
       </div>
+      ${renderSkillConfigDialog()}
     </section>`;
   }
 
@@ -2795,8 +4771,31 @@
       return;
     }
 
+    if (state.route === "plugins") {
+      nodes.stream.innerHTML = renderPluginHubPage();
+      return;
+    }
+
     if (state.route === "product") {
       nodes.stream.innerHTML = renderProductDocPage();
+      return;
+    }
+
+    if (state.route === "clawconfig") {
+      if (window.ClawConfigModule?.render) {
+        window.ClawConfigModule.render();
+      } else {
+        nodes.stream.innerHTML = `<div class="panel-empty">Claw 配置模块加载失败。</div>`;
+      }
+      return;
+    }
+
+    if (state.route === "files") {
+      if (window.FilesModule?.render) {
+        window.FilesModule.render();
+      } else {
+        nodes.stream.innerHTML = `<div class="panel-empty">文件模块加载失败。</div>`;
+      }
       return;
     }
 
@@ -2814,20 +4813,36 @@
   }
 
   function renderEnterpriseAgentsPage() {
-    const query = state.enterprise.query.trim().toLowerCase();
     const categoryId = state.enterprise.category || "all";
-    const filtered = enterpriseAgents.filter((agent) => {
-      if (categoryId !== "all" && agent.category !== categoryId) return false;
-      if (!query) return true;
-      const blob = `${agent.name}${agent.description}`.toLowerCase();
-      return blob.includes(query);
-    });
+    const sourceScope = state.enterprise.sourceScope || "all";
+    const sort = state.enterprise.sort || "latest";
+    const filtered = filterEnterpriseAgentList();
+    const sourceScopeTabs = enterpriseAgentSourceScopeTabs
+      .map(
+        (tab) => `<button
+          type="button"
+          class="enterprise-scope-tab${tab.id === sourceScope ? " active" : ""}"
+          data-agent-source-scope="${escapeAttr(tab.id)}"
+        >${escapeHTML(tab.label)}</button>`
+      )
+      .join("");
+    const sortTabs = [
+      ["latest", "最新"],
+      ["hot", "最热"]
+    ]
+      .map(
+        ([id, label]) => `<button
+          type="button"
+          class="enterprise-sort-tab${sort === id ? " active" : ""}"
+          data-agent-sort="${escapeAttr(id)}"
+        >${escapeHTML(label)}</button>`
+      )
+      .join("");
 
     return `<section class="enterprise-plaza">
       <header class="enterprise-plaza-head">
         <div class="enterprise-plaza-copy">
-          <h2>企业级智能体广场</h2>
-          <p>按照领域浏览企业级智能体，一键召唤专业智能体</p>
+          <h2>智能体广场</h2>
         </div>
         <label class="enterprise-search">
           ${icon("search")}
@@ -2840,34 +4855,68 @@
           />
         </label>
       </header>
-      <nav class="enterprise-tabs" aria-label="智能体分类">
-        <div class="enterprise-tabs-scroll">
-          ${enterpriseAgentCategoryTabs
-            .map((tab) => `<button
+      <nav class="enterprise-scope-nav" aria-label="来源范围">
+        <div class="enterprise-scope-scroll">${sourceScopeTabs}</div>
+      </nav>
+      <div class="enterprise-filter-bar">
+        <nav class="enterprise-tabs" aria-label="智能体分类">
+          <div class="enterprise-tabs-scroll">
+            ${enterpriseAgentCategoryTabs
+              .map(
+                (tab) => `<button
               type="button"
               class="enterprise-tab${tab.id === categoryId ? " active" : ""}"
               data-agent-tab="${escapeAttr(tab.id)}"
-            >${escapeHTML(tab.label)}</button>`)
-            .join("")}
+            >${escapeHTML(tab.label)}</button>`
+              )
+              .join("")}
+          </div>
+        </nav>
+        <div class="enterprise-sort-group" aria-label="排序">
+          ${sortTabs}
         </div>
-      </nav>
+      </div>
       <section class="enterprise-grid" aria-label="智能体列表">
         ${filtered.length
           ? filtered.map((agent) => renderEnterpriseAgentCard(agent)).join("")
-          : `<div class="enterprise-empty">未找到匹配的智能体，可尝试切换分类或调整关键词。</div>`}
+          : `<div class="enterprise-empty">未找到匹配的智能体，可尝试切换来源、分类、排序或调整关键词。</div>`}
       </section>
     </section>`;
   }
 
   function renderEnterpriseAgentCard(agent) {
+    const fav = isEnterpriseAgentFavorite(agent);
+    const summoned = state.enterprise.summonedAgentIds.includes(agent.id);
+    const selected = state.enterprise.selectedAgentId === agent.id;
+    const actionLabel = selected ? "当前智能体" : summoned ? "切换" : "召唤";
     return `<article class="enterprise-agent-card">
       <div class="enterprise-agent-accent" aria-hidden="true"></div>
+      <button
+        type="button"
+        class="enterprise-agent-fav${fav ? " is-active" : ""}"
+        data-enterprise-fav="${escapeAttr(agent.id)}"
+        aria-label="${fav ? "取消收藏" : "收藏"}"
+        title="${fav ? "取消收藏" : "收藏"}"
+      >
+        <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+          <path d="M12 4.5 14.1 9.9 20 10.8 15.5 15 16.6 21 12 18 7.4 21 8.5 15 4 10.8l5.9-.9L12 4.5Z" fill="${fav ? "currentColor" : "none"}" stroke="currentColor" stroke-width="1.35" stroke-linejoin="round" />
+        </svg>
+      </button>
       <div class="enterprise-agent-avatar">${escapeHTML(getAgentAvatarInitial(agent.name))}</div>
       <strong class="enterprise-agent-name">${escapeHTML(agent.name)}</strong>
       <p class="enterprise-agent-desc">${escapeHTML(agent.description)}</p>
+      <div class="enterprise-agent-metrics">
+        <span class="enterprise-agent-metric" title="使用量"><span class="enterprise-agent-metric-label">使用量</span><strong>${formatEnterpriseMetric(agent.usageCount)}</strong></span>
+        <span class="enterprise-agent-metric" title="收藏量"><span class="enterprise-agent-metric-label">收藏量</span><strong>${formatEnterpriseMetric(agent.favoriteCount)}</strong></span>
+      </div>
       <div class="enterprise-agent-divider"></div>
       <div class="enterprise-agent-actions">
-        <button type="button" class="enterprise-agent-chat" data-enterprise-chat="${escapeAttr(agent.id)}">对话</button>
+        <button
+          type="button"
+          class="enterprise-agent-chat${selected ? " is-active" : ""}"
+          data-enterprise-chat="${escapeAttr(agent.id)}"
+          aria-pressed="${selected ? "true" : "false"}"
+        >${escapeHTML(actionLabel)}</button>
       </div>
     </article>`;
   }
@@ -2878,8 +4927,8 @@
     if (!agent) {
       return `<div class="enterprise-chat-empty">
         <div class="enterprise-chat-empty-card">
-          <strong>请选择一个企业级智能体</strong>
-          <p>从左侧“企业级智能体”进入广场，然后点击“对话”。</p>
+          <strong>请选择一个企业智能体</strong>
+          <p>从左侧「智能体广场」进入，然后点击「召唤」。</p>
         </div>
       </div>`;
     }
@@ -3834,7 +5883,10 @@
   }
 
   function getComposerDraftText() {
-    return (nodes.composerTextarea?.value || "").trim();
+    const text = (nodes.composerTextarea?.value || "").trim();
+    const skills = getComposerSkillTokens();
+    if (skills && text) return `${skills} ${text}`;
+    return skills || text;
   }
 
   function getRuntimeScopeKey() {
@@ -3905,7 +5957,7 @@
     state.runtimeSend.editingQueueId = "";
     state.runtimeSend.editDraft = "";
     state.runtimeSend.queueMenuId = "";
-    nodes.composerTextarea.value = "";
+    clearComposerDraft();
     render();
     nodes.composerTextarea.focus();
   }
@@ -4174,7 +6226,7 @@
     if (state.chatMode === "enterprise_draft" || state.chatMode === "enterprise_session") {
       renderEnterpriseRightPanel();
       syncRightPanelChrome(null);
-      renderPreviewPlaceholder("企业级智能体产物会在这里预览。");
+      renderPreviewPlaceholder("企业智能体产物会在这里预览。");
       return;
     }
     setEnterpriseOverviewPlanReady(true);
@@ -5354,14 +7406,14 @@
       state.enterprise.activeSessionId = target.id;
       state.enterprise.draftAgentId = target.enterpriseAgentId || getEnterpriseSession(target.id)?.agentId || "";
       const session = getEnterpriseSession(target.id);
-      nodes.composerTextarea.value = "";
+      clearComposerDraft();
       if (session?.status === "running" && session.phase < 6) {
         startEnterpriseRun(target.id);
       }
     } else {
       state.chatMode = "expense";
       state.enterprise.activeSessionId = "";
-      nodes.composerTextarea.value = "";
+      clearComposerDraft();
     }
     if (changed) renderRecentTasks();
     render();

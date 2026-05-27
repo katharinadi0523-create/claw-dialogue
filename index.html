@@ -7,7 +7,7 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>ClawAgent v1.0 · 企业 AI 工作代理原型</title>
-    <link rel="stylesheet" href="styles.css?v=20260518-toolstate2" />
+    <link rel="stylesheet" href="styles.css?v=20260527-composer-agent-picker" />
   </head>
   <body>
     <svg class="svg-sprite" aria-hidden="true">
@@ -18,6 +18,9 @@
       </symbol>
       <symbol id="icon-search" viewBox="0 0 24 24">
         <path d="m20 20-4.2-4.2M10.8 18a7.2 7.2 0 1 1 0-14.4 7.2 7.2 0 0 1 0 14.4Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
+      </symbol>
+      <symbol id="icon-filter" viewBox="0 0 24 24">
+        <path d="M4.5 6.5h15l-6 6v5l-3 1.5v-6.5l-6-6Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
       </symbol>
       <symbol id="icon-refresh" viewBox="0 0 24 24">
         <path
@@ -241,8 +244,7 @@
         <div class="brand-row">
           <div class="brand-mark"><svg><use href="#icon-logo"></use></svg></div>
           <div>
-            <div class="brand-name">ClawAgent</div>
-            <div class="brand-version">v1.0 企业工作代理</div>
+            <div class="brand-name">我的Claw</div>
           </div>
         </div>
 
@@ -252,11 +254,11 @@
         </label>
 
         <nav class="nav-list" id="navList" aria-label="主导航">
-          <button class="nav-item active" type="button" data-route="chat"><svg><use href="#icon-plus"></use></svg><span>新建任务</span></button>
-          <button class="nav-item" type="button" data-route="agents"><svg><use href="#icon-agent"></use></svg><span>企业级智能体</span></button>
+          <button class="nav-item active" type="button" data-route="chat"><svg><use href="#icon-plus"></use></svg><span>新建会话</span></button>
+          <button class="nav-item" type="button" data-route="agents"><svg><use href="#icon-agent"></use></svg><span>智能体广场</span></button>
           <button class="nav-item" type="button" data-route="skillhub"><svg><use href="#icon-skill"></use></svg><span>SkillHub</span></button>
+          <button class="nav-item" type="button" data-route="plugins"><svg><use href="#icon-tool"></use></svg><span>插件</span></button>
           <button class="nav-item" type="button" data-route="automation"><svg><use href="#icon-clock"></use></svg><span>自动化任务</span></button>
-          <button class="nav-item" type="button"><svg><use href="#icon-heartbeat"></use></svg><span>心跳</span></button>
         </nav>
 
         <section class="recent-section">
@@ -264,8 +266,8 @@
         </section>
 
         <div class="sidebar-bottom">
-          <button class="sidebar-link" type="button"><svg><use href="#icon-foundry"></use></svg><span>Agent Foundry</span></button>
-          <button class="sidebar-link" type="button"><svg><use href="#icon-settings"></use></svg><span>高级配置</span></button>
+          <button class="sidebar-link" type="button" data-route="files"><svg><use href="#icon-file"></use></svg><span>文件</span></button>
+          <button class="sidebar-link" type="button" data-route="clawconfig"><svg><use href="#icon-settings"></use></svg><span>Claw配置</span></button>
           <button class="sidebar-link" type="button" data-route="product"><svg><use href="#icon-info"></use></svg><span>产品说明</span></button>
           <div class="user-card">
             <div class="avatar">张</div>
@@ -307,13 +309,16 @@
 
         <section class="composer-card" id="composerCard">
           <div class="composer-input-wrap">
-            <textarea
-              id="composerTextarea"
-              rows="2"
-              placeholder="/ 键入以筛选或选择技能"
-              autocomplete="off"
-              spellcheck="false"
-            ></textarea>
+            <div class="composer-input-surface" id="composerInputSurface">
+              <div class="composer-skill-chips" id="composerSkillChips" hidden></div>
+              <textarea
+                id="composerTextarea"
+                rows="2"
+                placeholder="/ 键入以筛选或选择技能"
+                autocomplete="off"
+                spellcheck="false"
+              ></textarea>
+            </div>
             <div class="skill-picker" id="skillPicker" hidden>
               <p class="skill-picker-hint" id="skillPickerHint" hidden>键入以筛选</p>
               <div class="skill-picker-scroll" id="skillPickerScroll" aria-label="技能列表区">
@@ -331,6 +336,27 @@
               <button type="button" id="skillPickerBtn" aria-haspopup="listbox" aria-expanded="false">
                 技能 <svg><use href="#icon-chevron"></use></svg>
               </button>
+              <div class="composer-agent-wrap" id="composerAgentWrap">
+                <button
+                  type="button"
+                  class="composer-agent-button"
+                  id="composerAgentButton"
+                  aria-haspopup="listbox"
+                  aria-expanded="false"
+                >
+                  <span id="composerAgentLabel">智能体</span>
+                  <svg><use href="#icon-chevron"></use></svg>
+                </button>
+                <div class="composer-agent-menu" id="composerAgentMenu" role="listbox" hidden>
+                  <div class="composer-agent-list" id="composerAgentList"></div>
+                  <div class="composer-agent-footer">
+                    <button type="button" class="composer-agent-summon" id="composerAgentSummonOther">
+                      <svg><use href="#icon-agent"></use></svg>
+                      <span>召唤其他智能体</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
             <div class="composer-send">
               <button class="attach-button" type="button" title="附件"><svg><use href="#icon-attach"></use></svg></button>
@@ -419,7 +445,12 @@
 
     <script src="data.js?v=20260518-toolstate2"></script>
     <script src="automation-data.js?v=20260506-1"></script>
-    <script src="automation-module.js?v=20260430-14"></script>
-    <script src="app.js?v=20260518-toolstate2"></script>
+    <script src="automation-executions-data.js?v=20260522-1"></script>
+    <script src="automation-module.js?v=20260526-agent-column"></script>
+    <script src="claw-config-data.js?v=20260522-primary-fallback"></script>
+    <script src="claw-config-module.js?v=20260522-nexus-style"></script>
+    <script src="files-data.js?v=20260522-workspace"></script>
+    <script src="files-module.js?v=20260522-workspace"></script>
+    <script src="app.js?v=20260527-composer-agent-picker"></script>
   </body>
 </html>

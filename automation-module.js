@@ -24,6 +24,24 @@
 
   const PAGE_SIZE = 10;
 
+  const AUTOMATION_PANEL_ITEMS = [
+    { key: "task-list", label: "任务列表", description: "管理当前 Claw 已配置的自动化任务。" },
+    { key: "execution-history", label: "执行历史", description: "查看每次触发与执行产生的历史记录。" }
+  ];
+
+  const EXECUTION_SCOPE_OPTIONS = [
+    { value: "all", label: "全部任务" },
+    { value: "specified", label: "指定任务" }
+  ];
+
+  const EXECUTION_STATUS_OPTIONS = [
+    { value: "all", label: "全部" },
+    { value: "success", label: "成功" },
+    { value: "failure", label: "失败" }
+  ];
+
+  const DELIVERY_CHANNELS = ["飞书", "蓝信", "钉钉", "企微", "QQ", "AF平台"];
+
   const CLAW_SELECT_GROUPS = [
     {
       label: "我的 Claw",
@@ -56,11 +74,18 @@
 
   const state = {
     tasks: [],
+    executions: [],
+    activePanel: "task-list",
     query: "",
     currentPage: 1,
     createMenuOpen: false,
     modal: null,
     message: "",
+    executionScope: "all",
+    executionTaskId: "all",
+    executionQuery: "",
+    executionStatus: "all",
+    executionChannel: "all",
     root: null
   };
 
@@ -231,6 +256,9 @@
   function init({ container }) {
     state.root = container;
     state.tasks = Array.isArray(window.AUTOMATION_TASKS_MOCK) ? window.AUTOMATION_TASKS_MOCK.map(clone) : [];
+    state.executions = Array.isArray(window.AUTOMATION_EXECUTIONS_MOCK)
+      ? window.AUTOMATION_EXECUTIONS_MOCK.map(clone)
+      : [];
     emitTasksUpdated();
 
     container.addEventListener("click", handleClick);
@@ -415,13 +443,32 @@
   }
 
   function handleClick(event) {
+    const panelTab = event.target.closest("[data-automation-panel]");
+    if (panelTab) {
+      const next = panelTab.getAttribute("data-automation-panel") || "task-list";
+      state.activePanel = next === "execution-history" ? "execution-history" : "task-list";
+      state.createMenuOpen = false;
+      render();
+      return;
+    }
+
+    const execView = event.target.closest("[data-automation-exec-view]");
+    if (execView) {
+      const id = execView.getAttribute("data-automation-exec-view") || "";
+      const row = state.executions.find((item) => item.id === id);
+      if (row) {
+        setMessage(`${row.taskName}：${row.resultSummary || row.finalOutput}`);
+      }
+      return;
+    }
+
     const actionEl = event.target.closest("[data-automation-action]");
     if (!actionEl) return;
     const action = actionEl.getAttribute("data-automation-action");
     if (!action) return;
 
     if (action === "refresh") {
-      setMessage("任务列表已刷新。");
+      setMessage(state.activePanel === "execution-history" ? "执行历史已刷新。" : "任务列表已刷新。");
       return;
     }
     if (action === "toggle-create-menu") {
@@ -539,6 +586,12 @@
   function handleInput(event) {
     const field = event.target.closest("[data-automation-field]");
     if (field) {
+      const scope = field.getAttribute("data-automation-field");
+      if (scope === "exec-query") {
+        state.executionQuery = field.value || "";
+        render();
+        return;
+      }
       state.query = field.value || "";
       state.currentPage = 1;
       render();
@@ -549,6 +602,31 @@
   }
 
   function handleChange(event) {
+    const execField = event.target.closest("[data-automation-field]");
+    if (execField) {
+      const scope = execField.getAttribute("data-automation-field");
+      if (scope === "exec-scope") {
+        state.executionScope = execField.value === "specified" ? "specified" : "all";
+        if (state.executionScope === "all") state.executionTaskId = "all";
+        render();
+        return;
+      }
+      if (scope === "exec-task") {
+        state.executionTaskId = execField.value || "all";
+        render();
+        return;
+      }
+      if (scope === "exec-status") {
+        state.executionStatus = execField.value || "all";
+        render();
+        return;
+      }
+      if (scope === "exec-channel") {
+        state.executionChannel = execField.value || "all";
+        render();
+        return;
+      }
+    }
     if (!state.modal) return;
     syncDraftField(event.target);
   }
@@ -571,30 +649,72 @@
     render();
   }
 
-  function render() {
-    if (!state.root) return;
+  function getActivePanelMeta() {
+    return AUTOMATION_PANEL_ITEMS.find((item) => item.key === state.activePanel) || AUTOMATION_PANEL_ITEMS[0];
+  }
+
+  function filterExecutions() {
+    const q = state.executionQuery.trim().toLowerCase();
+    return state.executions
+      .filter((row) => {
+        if (state.executionScope === "specified") {
+          return state.executionTaskId !== "all" && row.taskId === state.executionTaskId;
+        }
+        return true;
+      })
+      .filter((row) => {
+        if (!q) return true;
+        return (
+          row.taskName.toLowerCase().includes(q) ||
+          String(row.finalOutput || "")
+            .toLowerCase()
+            .includes(q)
+        );
+      })
+      .filter((row) => state.executionStatus === "all" || row.status === state.executionStatus)
+      .filter((row) => state.executionChannel === "all" || row.deliveryChannel === state.executionChannel)
+      .sort((a, b) => String(b.executedAt).localeCompare(String(a.executedAt)));
+  }
+
+  function renderExecutionStatusBadge(status) {
+    if (status === "failure") {
+      return `<span class="automation-exec-status is-failure"><span class="automation-exec-status-dot" aria-hidden="true"></span>失败</span>`;
+    }
+    return `<span class="automation-exec-status is-success"><span class="automation-exec-status-dot" aria-hidden="true"></span>成功</span>`;
+  }
+
+  function renderPanelTabs() {
+    return `<div class="automation-panel-tabs" role="tablist" aria-label="自动化任务视图">
+      ${AUTOMATION_PANEL_ITEMS.map(
+        (panel) => `<button
+          type="button"
+          role="tab"
+          class="automation-panel-tab${state.activePanel === panel.key ? " is-active" : ""}"
+          data-automation-panel="${escapeHTML(panel.key)}"
+          aria-selected="${state.activePanel === panel.key ? "true" : "false"}"
+        >${escapeHTML(panel.label)}</button>`
+      ).join("")}
+    </div>`;
+  }
+
+  function renderTaskListPanel() {
     const { filtered, totalPages, pageItems } = getPagedTasks();
-    state.root.innerHTML = `
-      <section class="automation-page" aria-labelledby="sessionTitle">
-        <header class="automation-head">
-          <div class="automation-toolbar">
-            <label class="automation-search">
-              <input type="search" placeholder="按任务名称搜索" value="${escapeHTML(state.query)}" data-automation-field />
-            </label>
-            <button type="button" class="automation-icon-button" data-automation-action="refresh">刷新</button>
-            <div class="automation-create-wrap" data-automation-create-wrap>
-              <button type="button" class="automation-primary-button" data-automation-action="toggle-create-menu">新建任务</button>
-              ${state.createMenuOpen ? renderCreateMenu() : ""}
-            </div>
+    return `
+      <div class="automation-panel automation-panel--tasks" role="tabpanel">
+        <div class="automation-panel-toolbar">
+          <label class="automation-search">
+            <input type="search" placeholder="按任务名称搜索" value="${escapeHTML(state.query)}" data-automation-field="task-query" />
+          </label>
+          <button type="button" class="automation-icon-button" data-automation-action="refresh">刷新</button>
+          <div class="automation-create-wrap" data-automation-create-wrap>
+            <button type="button" class="automation-primary-button" data-automation-action="toggle-create-menu">新建任务</button>
+            ${state.createMenuOpen ? renderCreateMenu() : ""}
           </div>
-        </header>
-
-        ${state.message ? `<div class="automation-banner">${escapeHTML(state.message)}</div>` : ""}
-
+        </div>
         <section class="automation-table-shell">
           <div class="automation-table-head">
             <div>任务</div>
-            <div>执行Claw</div>
+            <div>执行智能体</div>
             <div>触发方式</div>
             <div>上次执行时间</div>
             <div>最近结果</div>
@@ -603,6 +723,139 @@
           ${filtered.length ? pageItems.map(renderTaskRow).join("") : renderEmptyState()}
           ${filtered.length ? renderPagination(filtered.length, totalPages) : ""}
         </section>
+      </div>
+    `;
+  }
+
+  function renderExecutionHistoryPanel() {
+    const filtered = filterExecutions();
+    const taskOptions = [
+      `<option value="all"${state.executionTaskId === "all" ? " selected" : ""}>请选择任务</option>`,
+      ...state.tasks.map(
+        (task) =>
+          `<option value="${escapeHTML(task.id)}"${state.executionTaskId === task.id ? " selected" : ""}>${escapeHTML(task.name)}</option>`
+      )
+    ].join("");
+    const rows = filtered.length
+      ? filtered
+          .map(
+            (row) => `<tr class="automation-exec-row">
+              <td class="automation-exec-cell automation-exec-cell--name">
+                <button type="button" class="automation-exec-task-link" data-automation-exec-view="${escapeHTML(row.id)}">${escapeHTML(row.taskName)}</button>
+                <div class="automation-exec-trace">${escapeHTML(row.traceId)}</div>
+              </td>
+              <td class="automation-exec-cell automation-exec-cell--claw">${escapeHTML(getExecutionClawLabelForRow(row))}</td>
+              <td class="automation-exec-cell automation-exec-cell--output">
+                <div class="automation-exec-output" title="${escapeHTML(row.finalOutput)}">${escapeHTML(row.finalOutput)}</div>
+              </td>
+              <td class="automation-exec-cell automation-exec-cell--status">${renderExecutionStatusBadge(row.status)}</td>
+              <td class="automation-exec-cell automation-exec-cell--time">${escapeHTML(row.executedAt)}</td>
+              <td class="automation-exec-cell automation-exec-cell--actions">
+                <button type="button" class="automation-link-button" data-automation-exec-view="${escapeHTML(row.id)}">查看详情</button>
+              </td>
+            </tr>`
+          )
+          .join("")
+      : `<tr><td colspan="6" class="automation-exec-empty">暂无匹配的执行记录。</td></tr>`;
+
+    return `
+      <div class="automation-panel automation-panel--history" role="tabpanel">
+        <div class="automation-history-head">
+          <div>
+            <h2 class="automation-history-title">自动化任务执行历史</h2>
+            <p class="automation-history-desc">用于查看当前 Claw 的自动化任务历史执行记录，一条记录对应一次任务触发与执行。</p>
+          </div>
+          <div class="automation-history-sort-hint">排序：最新优先</div>
+        </div>
+        <div class="automation-exec-filters">
+          <label class="automation-exec-filter">
+            <span class="automation-exec-filter-label">任务范围</span>
+            <select class="automation-exec-select" data-automation-field="exec-scope">
+              ${EXECUTION_SCOPE_OPTIONS.map(
+                (opt) =>
+                  `<option value="${escapeHTML(opt.value)}"${state.executionScope === opt.value ? " selected" : ""}>${escapeHTML(opt.label)}</option>`
+              ).join("")}
+            </select>
+          </label>
+          <label class="automation-exec-filter">
+            <span class="automation-exec-filter-label">指定任务</span>
+            ${
+              state.executionScope === "specified"
+                ? `<select class="automation-exec-select" data-automation-field="exec-task">${taskOptions}</select>`
+                : `<div class="automation-exec-select-placeholder">不限定具体任务</div>`
+            }
+          </label>
+          <label class="automation-exec-filter automation-exec-filter--grow">
+            <span class="automation-exec-filter-label">搜索</span>
+            <input
+              type="search"
+              class="automation-exec-search"
+              data-automation-field="exec-query"
+              value="${escapeHTML(state.executionQuery)}"
+              placeholder="按任务名称或执行输出筛选"
+            />
+          </label>
+          <label class="automation-exec-filter">
+            <span class="automation-exec-filter-label">执行结果</span>
+            <select class="automation-exec-select" data-automation-field="exec-status">
+              ${EXECUTION_STATUS_OPTIONS.map(
+                (opt) =>
+                  `<option value="${escapeHTML(opt.value)}"${state.executionStatus === opt.value ? " selected" : ""}>${escapeHTML(opt.label)}</option>`
+              ).join("")}
+            </select>
+          </label>
+          <label class="automation-exec-filter">
+            <span class="automation-exec-filter-label">交付渠道</span>
+            <select class="automation-exec-select" data-automation-field="exec-channel">
+              <option value="all"${state.executionChannel === "all" ? " selected" : ""}>全部</option>
+              ${DELIVERY_CHANNELS.map(
+                (channel) =>
+                  `<option value="${escapeHTML(channel)}"${state.executionChannel === channel ? " selected" : ""}>${escapeHTML(channel)}</option>`
+              ).join("")}
+            </select>
+          </label>
+        </div>
+        <div class="automation-exec-table-wrap">
+          <table class="automation-exec-table">
+            <thead>
+              <tr>
+                <th>任务名称</th>
+                <th>执行智能体</th>
+                <th>执行输出</th>
+                <th>执行结果</th>
+                <th>执行时间</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <footer class="automation-exec-foot">
+          <span>共 ${filtered.length} 条</span>
+          <button type="button" class="automation-icon-button" data-automation-action="refresh">刷新</button>
+        </footer>
+      </div>
+    `;
+  }
+
+  function render() {
+    if (!state.root) return;
+    const panelMeta = getActivePanelMeta();
+    state.root.innerHTML = `
+      <section class="automation-page" aria-labelledby="automationPageTitle">
+        <header class="automation-head">
+          <h1 class="automation-title" id="automationPageTitle">自动化任务</h1>
+        </header>
+
+        ${state.message ? `<div class="automation-banner">${escapeHTML(state.message)}</div>` : ""}
+
+        <div class="automation-panel-shell">
+          <div class="automation-panel-shell-top">
+            ${renderPanelTabs()}
+            <p class="automation-panel-desc">${escapeHTML(panelMeta.description)}</p>
+          </div>
+          ${state.activePanel === "execution-history" ? renderExecutionHistoryPanel() : renderTaskListPanel()}
+        </div>
 
         ${state.modal ? renderModal() : ""}
       </section>
@@ -769,6 +1022,13 @@
     }
     if (LEGACY_AGENT_LABELS[id]) return LEGACY_AGENT_LABELS[id];
     return id;
+  }
+
+  function getExecutionClawLabelForRow(row) {
+    const task = state.tasks.find((item) => item.id === row.taskId);
+    if (task) return getExecutionClawLabel(task);
+    if (row.executionClaw) return row.executionClaw;
+    return "—";
   }
 
   function collectKnownClawIds() {

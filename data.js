@@ -39,6 +39,12 @@ const DEMO_DATA = (() => {
     { id: "task-008", title: "客户拜访纪要归档", status: "awaiting", pinned: false }
   ];
 
+  const enterpriseAgentSourceScopeTabs = [
+    { id: "all", label: "全部" },
+    { id: "favorite", label: "我的收藏" },
+    { id: "org", label: "我的组织" }
+  ];
+
   const enterpriseAgentCategoryTabs = [
     { id: "all", label: "全部" },
     { id: "product_design", label: "产品设计" },
@@ -364,7 +370,7 @@ const DEMO_DATA = (() => {
       type: "navigation",
       schema: {
         active_route: "new_task",
-        nav_items: ["新建任务", "企业级智能体", "SkillHub", "自动化任务", "心跳"],
+        nav_items: ["新建会话", "智能体广场", "SkillHub", "插件", "自动化任务"],
         recent_task_limit: recentTasks.length,
         supports: ["pin", "rename", "delete"]
       }
@@ -1807,6 +1813,7 @@ const DEMO_DATA = (() => {
     artifactsAfterDeletion,
     draftDocumentArtifact,
     recentTasks,
+    enterpriseAgentSourceScopeTabs,
     enterpriseAgentCategoryTabs,
     enterpriseAgents,
     enterpriseFlowPresets,
