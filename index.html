@@ -8,8 +8,150 @@
     <meta http-equiv="Expires" content="0" />
     <title>ClawAgent v1.0 · 企业 AI 工作代理原型</title>
     <link rel="stylesheet" href="styles.css?v=20260527-composer-agent-picker" />
+    <link rel="stylesheet" href="login.css?v=20260601-dynamic-hero-fit" />
   </head>
   <body>
+    <!-- Login Overlay -->
+    <div id="loginOverlay" class="login-overlay">
+      <div class="login-container">
+        <div class="login-left">
+          <div class="login-hero" aria-label="新星 Agent Foundry 登录视觉">
+            <div class="hero-grid"></div>
+            <div class="hero-orbit hero-orbit-outer"></div>
+            <div class="hero-orbit hero-orbit-inner"></div>
+            <div class="hero-stars">
+              <span></span><span></span><span></span><span></span><span></span>
+            </div>
+
+            <div class="hero-copy">
+              <div class="hero-brand">
+                <svg><use href="#icon-logo"></use></svg>
+                <strong>新星 Agent Foundry</strong>
+                <span>旗下产品</span>
+              </div>
+              <h1>你的个人 <span>AI</span> 智能体工作台</h1>
+              <p>Claw 帮你思考、规划和执行，让复杂的工作变得简单高效。</p>
+            </div>
+
+            <div class="hero-card hero-nav-card float-slow">
+              <div class="hero-card-row active">
+                <svg><use href="#icon-foundry"></use></svg>
+                <strong>工作台</strong>
+              </div>
+              <div class="hero-card-row muted">
+                <svg><use href="#icon-chat-bubble"></use></svg>
+                <span>会话</span>
+              </div>
+              <div class="hero-card-row muted">
+                <svg><use href="#icon-archive"></use></svg>
+                <span>记忆</span>
+              </div>
+              <div class="hero-card-row muted">
+                <svg><use href="#icon-heartbeat"></use></svg>
+                <span>自动化任务</span>
+              </div>
+            </div>
+
+            <div class="hero-card hero-todo-card float-medium">
+              <div class="hero-card-title">
+                <svg><use href="#icon-clock"></use></svg>
+                <strong>待办事项</strong>
+              </div>
+              <div class="todo-line active"><i></i><span>查看项目方案</span></div>
+              <div class="todo-line"><i></i><span>分析竞品数据</span></div>
+              <div class="todo-line"><i></i><span>撰写周报总结</span></div>
+            </div>
+
+            <div class="hero-card hero-progress-card float-fast">
+              <strong>项目进度</strong>
+              <b>72%</b>
+              <div class="progress-track"><span></span></div>
+              <small>智能体正在高效执行中</small>
+            </div>
+
+            <div class="hero-robot float-robot" aria-hidden="true">
+              <div class="robot-antenna"><span></span></div>
+              <div class="robot-ear robot-ear-left"></div>
+              <div class="robot-ear robot-ear-right"></div>
+              <div class="robot-head">
+                <div class="robot-face">
+                  <i></i>
+                  <i></i>
+                </div>
+              </div>
+              <div class="robot-glow"></div>
+            </div>
+
+            <div class="hero-platform">
+              <div class="platform-ring"></div>
+              <div class="platform-core"></div>
+            </div>
+
+            <div class="hero-feature-strip">
+              <div>
+                <svg><use href="#icon-spark"></use></svg>
+                <strong>智能理解</strong>
+                <span>快速洞察你的需求</span>
+              </div>
+              <div>
+                <svg><use href="#icon-heartbeat"></use></svg>
+                <strong>高效执行</strong>
+                <span>自动化完成各项任务</span>
+              </div>
+              <div>
+                <svg><use href="#icon-chart-bars"></use></svg>
+                <strong>工具生态</strong>
+                <span>灵活接入丰富工具与服务</span>
+              </div>
+              <div>
+                <svg><use href="#icon-shield"></use></svg>
+                <strong>隐私安全</strong>
+                <span>数据加密，隐私保护</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        
+        <div class="login-right">
+          <div class="login-form-wrapper">
+            <h2 class="form-title">欢迎登录 <span>Claw</span> 个人工作台</h2>
+            <p class="form-subtitle"><svg><use href="#icon-shield"></use></svg> 新星 Agent Foundry 旗下个人智能体工作台</p>
+            
+            <form id="loginForm" class="login-form">
+              <div class="form-group">
+                <label for="username">登录名</label>
+                <div class="input-with-icon">
+                  <svg><use href="#icon-agent"></use></svg>
+                  <input type="text" id="username" placeholder="请输入登录名" />
+                </div>
+              </div>
+              <div class="form-group">
+                <label for="password">密码</label>
+                <div class="input-with-icon">
+                  <svg><use href="#icon-settings"></use></svg>
+                  <input type="password" id="password" placeholder="请输入密码" />
+                  <button type="button" class="btn-icon" id="togglePassword"><svg><use href="#icon-eye"></use></svg></button>
+                </div>
+              </div>
+              
+              <div class="form-options">
+                <label class="checkbox-label">
+                  <input type="checkbox" id="remember" checked />
+                  <span>记住我</span>
+                </label>
+                <a href="#" class="forgot-pwd">忘记密码</a>
+              </div>
+              
+              <button type="submit" class="btn-submit">登录</button>
+            </form>
+            
+            <div class="form-footer">
+              <svg><use href="#icon-shield"></use></svg> 所有数据均加密传输与存储，保障你的隐私安全
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
     <svg class="svg-sprite" aria-hidden="true">
       <symbol id="icon-logo" viewBox="0 0 24 24">
         <path d="M4 7.5 12 3l8 4.5v9L12 21l-8-4.5v-9Z" fill="none" stroke="currentColor" stroke-width="1.6" />
@@ -54,6 +196,9 @@
       <symbol id="icon-clock" viewBox="0 0 24 24">
         <path d="M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18Z" fill="none" stroke="currentColor" stroke-width="1.7" />
         <path d="M12 7.5V12l3 2" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" />
+      </symbol>
+      <symbol id="icon-chat-bubble" viewBox="0 0 24 24">
+        <path d="M6.5 5.5h11A2.5 2.5 0 0 1 20 8v6.5a2.5 2.5 0 0 1-2.5 2.5H11l-4.5 3v-3A2.5 2.5 0 0 1 4 14.5V8a2.5 2.5 0 0 1 2.5-2.5Z" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round" />
       </symbol>
       <symbol id="icon-heartbeat" viewBox="0 0 24 24">
         <path d="M4 12h3l2-5 4 10 2-5h5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" />
@@ -237,6 +382,10 @@
         <path d="M5 7.5h14M9 7.5V5h6v2.5M8.2 7.5l.7 10.5h6.2l.7-10.5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
         <path d="M10.2 10.5v5M13.8 10.5v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
       </symbol>
+      <symbol id="icon-logout" viewBox="0 0 24 24">
+        <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+        <path d="M16 17l5-5-5-5M21 12H9" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" />
+      </symbol>
     </svg>
 
     <div class="app-shell" id="appShell">
@@ -256,7 +405,7 @@
         <nav class="nav-list" id="navList" aria-label="主导航">
           <button class="nav-item active" type="button" data-route="chat"><svg><use href="#icon-plus"></use></svg><span>新建会话</span></button>
           <button class="nav-item" type="button" data-route="agents"><svg><use href="#icon-agent"></use></svg><span>智能体广场</span></button>
-          <button class="nav-item" type="button" data-route="skillhub"><svg><use href="#icon-skill"></use></svg><span>SkillHub</span></button>
+          <button class="nav-item" type="button" data-route="skillhub"><svg><use href="#icon-skill"></use></svg><span>技能</span></button>
           <button class="nav-item" type="button" data-route="plugins"><svg><use href="#icon-tool"></use></svg><span>插件</span></button>
           <button class="nav-item" type="button" data-route="automation"><svg><use href="#icon-clock"></use></svg><span>自动化任务</span></button>
         </nav>
@@ -270,7 +419,15 @@
           <button class="sidebar-link" type="button" data-route="clawconfig"><svg><use href="#icon-settings"></use></svg><span>Claw配置</span></button>
           <button class="sidebar-link" type="button" data-route="product"><svg><use href="#icon-info"></use></svg><span>产品说明</span></button>
           <div class="user-card">
-            <div class="avatar">张</div>
+            <div class="user-avatar-wrap" id="userAvatarWrap">
+              <button class="avatar" type="button" id="userAvatarBtn" aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">张</button>
+              <div class="user-avatar-menu" id="userAvatarMenu" role="menu" aria-label="账户操作">
+                <button class="user-avatar-menu-item danger" type="button" id="logoutBtn" role="menuitem">
+                  <svg aria-hidden="true"><use href="#icon-logout"></use></svg>
+                  <span>退出登录</span>
+                </button>
+              </div>
+            </div>
             <div class="user-meta">
               <div class="user-name">张三</div>
               <div class="user-role">财务运营 · 产品部</div>
@@ -443,6 +600,7 @@
       </aside>
     </div>
 
+    <script src="login.js"></script>
     <script src="data.js?v=20260518-toolstate2"></script>
     <script src="automation-data.js?v=20260506-1"></script>
     <script src="automation-executions-data.js?v=20260522-1"></script>
@@ -451,6 +609,6 @@
     <script src="claw-config-module.js?v=20260522-nexus-style"></script>
     <script src="files-data.js?v=20260522-workspace"></script>
     <script src="files-module.js?v=20260522-workspace"></script>
-    <script src="app.js?v=20260527-composer-agent-picker"></script>
+    <script src="app.js?v=20260528-composer-agent-toggle"></script>
   </body>
 </html>

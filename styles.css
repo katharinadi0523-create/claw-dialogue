@@ -701,6 +701,104 @@ svg {
   background: var(--bg-surface-alt);
 }
 
+.user-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.user-avatar-wrap .avatar {
+  cursor: pointer;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.user-avatar-wrap .avatar.avatar-image {
+  padding: 2px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.user-avatar-wrap .avatar.avatar-image img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border-radius: 6px;
+  object-fit: contain;
+}
+
+.user-avatar-wrap:hover .avatar,
+.user-avatar-wrap:focus-within .avatar,
+.user-avatar-wrap[data-menu-open="true"] .avatar {
+  background: var(--brand-bg-strong, #dbeafe);
+  box-shadow: inset 0 0 0 1px var(--info-border);
+}
+
+.user-avatar-menu {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  left: 0;
+  display: grid;
+  width: 132px;
+  gap: 2px;
+  padding: 4px;
+  border: var(--hairline);
+  border-radius: 8px;
+  background: var(--bg-surface);
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.12);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 0.15s ease, transform 0.15s ease, visibility 0.15s ease;
+}
+
+.user-avatar-wrap:hover .user-avatar-menu,
+.user-avatar-wrap:focus-within .user-avatar-menu,
+.user-avatar-wrap[data-menu-open="true"] .user-avatar-menu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.user-avatar-menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  min-height: 30px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 13px;
+  text-align: left;
+}
+
+.user-avatar-menu-item svg {
+  width: 14px;
+  height: 14px;
+  flex-shrink: 0;
+}
+
+.user-avatar-menu-item:hover {
+  background: var(--bg-surface-alt);
+  color: var(--text-primary);
+}
+
+.user-avatar-menu-item.danger {
+  color: var(--danger-text);
+}
+
+.user-avatar-menu-item.danger:hover {
+  background: var(--danger-bg);
+  color: var(--danger-text);
+}
+
 .avatar {
   display: grid;
   width: 32px;

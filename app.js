@@ -894,9 +894,27 @@
       : `<div class="composer-agent-empty">暂无已召唤智能体</div>`;
   }
 
+  function dismissSummonedEnterpriseAgent(agentId) {
+    const agent = getEnterpriseAgentById(agentId);
+    if (!agent || !state.enterprise.summonedAgentIds.includes(agent.id)) return null;
+    state.enterprise.summonedAgentIds = state.enterprise.summonedAgentIds.filter((id) => id !== agent.id);
+    if (state.enterprise.selectedAgentId === agent.id) {
+      state.enterprise.selectedAgentId = "";
+    }
+    return agent;
+  }
+
   function selectSummonedEnterpriseAgent(agentId) {
     const agent = getEnterpriseAgentById(agentId);
     if (!agent || !state.enterprise.summonedAgentIds.includes(agent.id)) return;
+    if (state.enterprise.selectedAgentId === agent.id) {
+      dismissSummonedEnterpriseAgent(agent.id);
+      state.enterprise.agentSelectorOpen = false;
+      showSkillPlazaToast(`已取消召唤「${agent.name}」`);
+      render();
+      nodes.composerTextarea?.focus();
+      return;
+    }
     state.enterprise.selectedAgentId = agent.id;
     state.enterprise.agentSelectorOpen = false;
     renderComposerAgentSelector();
@@ -3057,7 +3075,7 @@
       <div class="session-group-header">
         <div class="session-group-title">
           ${icon("clock")}
-          <span>自动输任务执行</span>
+          <span>自动化任务</span>
         </div>
         <div class="session-group-actions">
           ${tasks.length ? `<span class="session-group-meta">${escapeHTML(String(tasks.length))}</span>` : ""}
