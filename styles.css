@@ -134,13 +134,21 @@ svg {
   place-items: center;
   border: 1px solid var(--info-border);
   border-radius: 8px;
-  background: var(--brand-bg);
+  background: #fff;
+  overflow: hidden;
   color: var(--brand-primary);
 }
 
 .brand-mark svg {
   width: 22px;
   height: 22px;
+}
+
+.brand-mark-image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
 }
 
 .brand-name {
