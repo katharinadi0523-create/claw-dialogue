@@ -79,6 +79,15 @@
     query: "",
     currentPage: 1,
     createMenuOpen: false,
+    taskFilterMenu: "",
+    taskFilters: {
+      claw: "all",
+      enabled: "all",
+      channel: "all",
+      trigger: "all",
+      lastStatus: "all",
+      lastRunTime: "all"
+    },
     modal: null,
     message: "",
     executionScope: "all",
@@ -160,6 +169,7 @@
       last_run_at: "",
       last_run_status: "never",
       enabled: true,
+      memory_enabled: false,
       agent_id: "claw-mine-general",
       claw_id: "claw-mine-general",
       instruction: "",
@@ -190,6 +200,7 @@
       last_run_at: "",
       last_run_status: "never",
       enabled: true,
+      memory_enabled: false,
       agent_id: "claw-mine-general",
       claw_id: "claw-mine-general",
       instruction: "",
@@ -249,13 +260,46 @@
       nextTask.last_run_at = "";
       nextTask.last_run_status = "never";
       nextTask.recent_runs = [];
+      nextTask.claw_status = "normal";
+      nextTask.disabled_by = nextTask.enabled ? "" : "user";
+    }
+    return normalizeTaskRuntime(nextTask);
+  }
+
+  function normalizeTaskRuntime(task) {
+    const nextTask = clone(task);
+    if (isTaskClawAbnormal(nextTask)) {
+      nextTask.enabled = false;
+      nextTask.disabled_by = "system";
+    } else if (!nextTask.enabled && !nextTask.disabled_by) {
+      nextTask.disabled_by = "user";
     }
     return nextTask;
   }
 
+  function isTaskClawAbnormal(task) {
+    return task.claw_status === "abnormal" || Boolean(task.claw_disabled_reason);
+  }
+
+  function getClawIssueReason(task) {
+    return task.claw_disabled_reason || "该智能体已停用、下架或被删除，请重新配置";
+  }
+
+  function getClawIssueTitle(task) {
+    const reason = getClawIssueReason(task);
+    return task.claw_disabled_at ? `${reason}；检测时间：${task.claw_disabled_at}` : reason;
+  }
+
+  function getTaskEnabledFilterValue(task) {
+    if (task.enabled) return "true";
+    return "false";
+  }
+
   function init({ container }) {
     state.root = container;
-    state.tasks = Array.isArray(window.AUTOMATION_TASKS_MOCK) ? window.AUTOMATION_TASKS_MOCK.map(clone) : [];
+    state.tasks = Array.isArray(window.AUTOMATION_TASKS_MOCK)
+      ? window.AUTOMATION_TASKS_MOCK.map((task) => normalizeTaskRuntime(task))
+      : [];
     state.executions = Array.isArray(window.AUTOMATION_EXECUTIONS_MOCK)
       ? window.AUTOMATION_EXECUTIONS_MOCK.map(clone)
       : [];
@@ -269,10 +313,17 @@
   }
 
   function handleDocumentMouseDown(event) {
-    if (!state.root || !state.createMenuOpen) return;
-    if (event.target.closest("[data-automation-create-wrap]")) return;
-    state.createMenuOpen = false;
-    render();
+    if (!state.root) return;
+    let shouldRender = false;
+    if (state.createMenuOpen && !event.target.closest("[data-automation-create-wrap]")) {
+      state.createMenuOpen = false;
+      shouldRender = true;
+    }
+    if (state.taskFilterMenu && !event.target.closest("[data-automation-filter-wrap]")) {
+      state.taskFilterMenu = "";
+      shouldRender = true;
+    }
+    if (shouldRender) render();
   }
 
   function handleKeyDown(event) {
@@ -285,13 +336,28 @@
     if (state.createMenuOpen) {
       state.createMenuOpen = false;
       render();
+      return;
+    }
+    if (state.taskFilterMenu) {
+      state.taskFilterMenu = "";
+      render();
     }
   }
 
   function getFilteredTasks() {
     const query = state.query.trim().toLowerCase();
-    if (!query) return state.tasks;
-    return state.tasks.filter((task) => task.name.toLowerCase().includes(query));
+    return state.tasks
+      .filter((task) => !query || task.name.toLowerCase().includes(query))
+      .filter((task) => state.taskFilters.claw === "all" || getExecutionClawLabel(task) === state.taskFilters.claw)
+      .filter((task) => state.taskFilters.enabled === "all" || getTaskEnabledFilterValue(task) === state.taskFilters.enabled)
+      .filter((task) => state.taskFilters.channel === "all" || getTaskDeliveryChannel(task) === state.taskFilters.channel)
+      .filter((task) => state.taskFilters.trigger === "all" || getTriggerTypeLabel(task) === state.taskFilters.trigger)
+      .filter((task) => state.taskFilters.lastStatus === "all" || getLastRunStatusLabel(task) === state.taskFilters.lastStatus)
+      .filter((task) => {
+        if (state.taskFilters.lastRunTime === "all") return true;
+        const hasRun = Boolean(task.last_run_at);
+        return state.taskFilters.lastRunTime === "has" ? hasRun : !hasRun;
+      });
   }
 
   function getPagedTasks() {
@@ -333,6 +399,7 @@
     const resolved = String(draft.claw_id || draft.agent_id || "claw-mine-general").trim();
     draft.claw_id = resolved;
     draft.agent_id = resolved;
+    draft.memory_enabled = draft.memory_enabled === true;
     return draft;
   }
 
@@ -473,7 +540,25 @@
     }
     if (action === "toggle-create-menu") {
       state.createMenuOpen = !state.createMenuOpen;
+      state.taskFilterMenu = "";
       render();
+      return;
+    }
+    if (action === "toggle-task-filter") {
+      const key = actionEl.getAttribute("data-filter-key") || "";
+      state.taskFilterMenu = state.taskFilterMenu === key ? "" : key;
+      state.createMenuOpen = false;
+      render();
+      return;
+    }
+    if (action === "set-task-filter") {
+      const key = actionEl.getAttribute("data-filter-key") || "";
+      if (Object.prototype.hasOwnProperty.call(state.taskFilters, key)) {
+        state.taskFilters[key] = actionEl.getAttribute("data-filter-value") || "all";
+        state.taskFilterMenu = "";
+        state.currentPage = 1;
+        render();
+      }
       return;
     }
     if (action === "create-scheduled") {
@@ -502,7 +587,15 @@
       const taskId = actionEl.getAttribute("data-task-id");
       const target = state.tasks.find((item) => item.id === taskId);
       if (!target) return;
+      if (isTaskClawAbnormal(target)) {
+        target.enabled = false;
+        target.disabled_by = "system";
+        emitTasksUpdated();
+        setMessage(`无法启用「${target.name}」：${getClawIssueReason(target)}。请先修复或更换执行 Claw。`);
+        return;
+      }
       target.enabled = !target.enabled;
+      target.disabled_by = target.enabled ? "" : "user";
       emitTasksUpdated();
       setMessage(`${target.name} 已${target.enabled ? "启用" : "停用"}。`);
       return;
@@ -636,9 +729,16 @@
     if (!field) return;
     const scope = input.getAttribute("data-modal-scope") || "root";
     if (scope === "root") {
+      const previousValue = state.modal.draft[field];
       state.modal.draft[field] = input.type === "checkbox" ? input.checked : input.value;
       if (field === "claw_id") {
         state.modal.draft.agent_id = state.modal.draft.claw_id;
+        if (previousValue && previousValue !== state.modal.draft.claw_id) {
+          state.modal.draft.claw_status = "normal";
+          state.modal.draft.claw_disabled_reason = "";
+          state.modal.draft.claw_disabled_at = "";
+          state.modal.draft.disabled_by = state.modal.draft.enabled ? "" : "user";
+        }
       }
     } else if (scope === "schedule") {
       state.modal.draft.schedule_config[field] = input.value;
@@ -703,26 +803,155 @@
       <div class="automation-panel automation-panel--tasks" role="tabpanel">
         <div class="automation-panel-toolbar">
           <label class="automation-search">
-            <input type="search" placeholder="按任务名称搜索" value="${escapeHTML(state.query)}" data-automation-field="task-query" />
+            <span class="automation-search-icon" aria-hidden="true"></span>
+            <input type="search" placeholder="搜索任务名称" value="${escapeHTML(state.query)}" data-automation-field="task-query" />
           </label>
-          <button type="button" class="automation-icon-button" data-automation-action="refresh">刷新</button>
+          <button type="button" class="automation-icon-button automation-refresh-button" data-automation-action="refresh" aria-label="刷新任务列表" title="刷新"></button>
           <div class="automation-create-wrap" data-automation-create-wrap>
-            <button type="button" class="automation-primary-button" data-automation-action="toggle-create-menu">新建任务</button>
+            <button type="button" class="automation-primary-button" data-automation-action="toggle-create-menu"><span aria-hidden="true">+</span> 创建任务</button>
             ${state.createMenuOpen ? renderCreateMenu() : ""}
           </div>
         </div>
         <section class="automation-table-shell">
-          <div class="automation-table-head">
-            <div>任务</div>
-            <div>执行智能体</div>
-            <div>触发方式</div>
-            <div>上次执行时间</div>
-            <div>最近结果</div>
-            <div>操作项</div>
-          </div>
-          ${filtered.length ? pageItems.map(renderTaskRow).join("") : renderEmptyState()}
+          ${
+            filtered.length
+              ? `<div class="automation-task-table-frame">
+                  <div class="automation-task-table-scroll">
+                    <div class="automation-table-head">
+                      <div>任务名称</div>
+                      ${renderFilterableHeader("执行Claw", "claw")}
+                      <div>描述</div>
+                      ${renderFilterableHeader("状态", "enabled")}
+                      ${renderFilterableHeader("交付渠道", "channel")}
+                      ${renderFilterableHeader("触发条件", "trigger")}
+                      ${renderFilterableHeader("上次执行状态", "lastStatus")}
+                      ${renderFilterableHeader("上次执行时间", "lastRunTime")}
+                    </div>
+                    ${pageItems.map(renderTaskMainRow).join("")}
+                  </div>
+                  <div class="automation-actions-rail">
+                    <div class="automation-actions-head">操作</div>
+                    ${pageItems.map(renderTaskActionsRow).join("")}
+                  </div>
+                </div>`
+              : renderEmptyState()
+          }
           ${filtered.length ? renderPagination(filtered.length, totalPages) : ""}
         </section>
+      </div>
+    `;
+  }
+
+  function renderFilterableHeader(label, key) {
+    const active = state.taskFilters[key] && state.taskFilters[key] !== "all";
+    const open = state.taskFilterMenu === key;
+    return `
+      <div class="automation-filter-wrap" data-automation-filter-wrap>
+        <button
+          type="button"
+          class="automation-filter-trigger ${active ? "is-active" : ""}"
+          data-automation-action="toggle-task-filter"
+          data-filter-key="${escapeHTML(key)}"
+          aria-haspopup="menu"
+          aria-expanded="${open ? "true" : "false"}"
+        >
+          <span>${escapeHTML(label)}</span>
+          <span class="automation-filter-glyph" aria-hidden="true"></span>
+        </button>
+        ${open ? renderTaskFilterMenu(key) : ""}
+      </div>
+    `;
+  }
+
+  function renderTaskFilterMenu(key) {
+    const options = getTaskFilterOptions(key);
+    const current = state.taskFilters[key] || "all";
+    return `
+      <div class="automation-filter-menu" role="menu">
+        ${options
+          .map(
+            (option) => `<button
+              type="button"
+              class="automation-filter-option ${current === option.value ? "is-selected" : ""}"
+              data-automation-action="set-task-filter"
+              data-filter-key="${escapeHTML(key)}"
+              data-filter-value="${escapeHTML(option.value)}"
+              role="menuitemradio"
+              aria-checked="${current === option.value ? "true" : "false"}"
+            >${escapeHTML(option.label)}</button>`
+          )
+          .join("")}
+      </div>
+    `;
+  }
+
+  function getTaskFilterOptions(key) {
+    if (key === "enabled") {
+      return [
+        { value: "all", label: "全部状态" },
+        { value: "true", label: "启用" },
+        { value: "false", label: "停用" }
+      ];
+    }
+    if (key === "lastRunTime") {
+      return [
+        { value: "all", label: "全部时间" },
+        { value: "has", label: "有执行记录" },
+        { value: "none", label: "未执行" }
+      ];
+    }
+
+    const valueMap = {
+      claw: { allLabel: "全部 Claw", getter: getExecutionClawLabel },
+      channel: { allLabel: "全部渠道", getter: getTaskDeliveryChannel },
+      trigger: { allLabel: "全部触发条件", getter: getTriggerTypeLabel },
+      lastStatus: { allLabel: "全部执行状态", getter: getLastRunStatusLabel }
+    };
+    const config = valueMap[key];
+    if (!config) return [{ value: "all", label: "全部" }];
+    const values = Array.from(new Set(state.tasks.map((task) => config.getter(task)).filter(Boolean)));
+    return [{ value: "all", label: config.allLabel }].concat(values.map((value) => ({ value, label: value })));
+  }
+
+  function renderTaskMainRow(task) {
+    const meta = RESULT_META[task.last_run_status] || RESULT_META.never;
+    const clawLabel = getExecutionClawLabel(task);
+    const channel = getTaskDeliveryChannel(task);
+    const clawIssue = isTaskClawAbnormal(task);
+    return `
+      <article class="automation-task-row">
+        <div class="automation-task-title" title="${escapeHTML(task.name)}">${escapeHTML(task.name)}</div>
+        <div class="automation-task-claw" title="${escapeHTML(clawIssue ? getClawIssueTitle(task) : clawLabel)}">
+          <span>${escapeHTML(clawLabel)}</span>
+          ${clawIssue ? `<small title="${escapeHTML(getClawIssueReason(task))}">${escapeHTML(getClawIssueReason(task))}</small>` : ""}
+        </div>
+        <div class="automation-task-desc" title="${escapeHTML(task.description || "—")}">${escapeHTML(task.description || "—")}</div>
+        <div>${renderTaskEnabledControl(task)}</div>
+        <div class="automation-task-channel">${escapeHTML(channel)}</div>
+        <div class="automation-task-trigger">
+          <div>${escapeHTML(task.trigger_summary)}</div>
+          <span class="automation-trigger-badge ${escapeHTML(task.trigger_mode)}">${escapeHTML(getTriggerTypeLabel(task))}</span>
+        </div>
+        <div>${renderLastRunStatus(meta)}</div>
+        <div class="automation-task-time">${escapeHTML(formatTaskLastRunTime(task.last_run_at))}</div>
+      </article>
+    `;
+  }
+
+  function renderTaskEnabledControl(task) {
+    return `
+      <button type="button" class="automation-status-switch ${task.enabled ? "is-on" : ""}" data-automation-action="toggle-enabled" data-task-id="${escapeHTML(task.id)}" title="${escapeHTML(isTaskClawAbnormal(task) ? getClawIssueTitle(task) : "")}" aria-label="${task.enabled ? "停用" : "启用"} ${escapeHTML(task.name)}">
+        <span>${task.enabled ? "启用" : "停用"}</span>
+        <i aria-hidden="true"></i>
+      </button>
+    `;
+  }
+
+  function renderTaskActionsRow(task) {
+    return `
+      <div class="automation-task-actions">
+        <button type="button" class="automation-link-button" data-automation-action="edit-task" data-task-id="${escapeHTML(task.id)}">编辑</button>
+        <button type="button" class="automation-link-button danger" data-automation-action="delete-task" data-task-id="${escapeHTML(task.id)}">删除</button>
       </div>
     `;
   }
@@ -877,29 +1106,30 @@
     `;
   }
 
-  function renderTaskRow(task) {
+  function getTaskDeliveryChannel(task) {
+    const index = Math.max(0, state.tasks.findIndex((item) => item.id === task.id));
+    return DELIVERY_CHANNELS[index % DELIVERY_CHANNELS.length] || "企微";
+  }
+
+  function getTriggerTypeLabel(task) {
+    if (task.trigger_type !== "time") return task.trigger_mode === "poll" ? "Poll 检查" : "Webhook 触发";
+    if (task.trigger_mode === "interval") return "间隔执行";
+    if (task.trigger_mode === "once") return "单次执行";
+    return "定时执行";
+  }
+
+  function getLastRunStatusLabel(task) {
     const meta = RESULT_META[task.last_run_status] || RESULT_META.never;
-    const clawLabel = getExecutionClawLabel(task);
-    return `
-      <article class="automation-task-row">
-        <div class="automation-task-main">
-          <div class="automation-task-title">${escapeHTML(task.name)}</div>
-          <div class="automation-task-desc">${escapeHTML(task.description || "—")}</div>
-        </div>
-        <div class="automation-task-claw" title="${escapeHTML(clawLabel)}">${escapeHTML(clawLabel)}</div>
-        <div class="automation-task-trigger">
-          <div>${escapeHTML(task.trigger_summary)}</div>
-          <span class="automation-trigger-badge ${escapeHTML(task.trigger_mode)}">${escapeHTML(task.trigger_type === "time" ? (task.trigger_mode === "interval" ? "间隔执行" : task.trigger_mode === "once" ? "单次执行" : "定时执行") : task.trigger_mode === "poll" ? "Poll 检查" : "Webhook 触发")}</span>
-        </div>
-        <div class="automation-task-time">${escapeHTML(task.last_run_at || "—")}</div>
-        <div><span class="automation-result-badge ${escapeHTML(meta.className)}">${escapeHTML(meta.label)}</span></div>
-        <div class="automation-task-actions">
-          <button type="button" class="automation-switch ${task.enabled ? "is-on" : ""}" data-automation-action="toggle-enabled" data-task-id="${escapeHTML(task.id)}"><span></span></button>
-          <button type="button" class="automation-link-button" data-automation-action="edit-task" data-task-id="${escapeHTML(task.id)}">编辑</button>
-          <button type="button" class="automation-link-button danger" data-automation-action="delete-task" data-task-id="${escapeHTML(task.id)}">删除</button>
-        </div>
-      </article>
-    `;
+    return meta.label;
+  }
+
+  function formatTaskLastRunTime(value) {
+    return value || "—";
+  }
+
+  function renderLastRunStatus(meta) {
+    const spinner = meta.className === "running" ? '<span class="automation-result-spinner" aria-hidden="true"></span>' : "";
+    return `<span class="automation-result-inline ${escapeHTML(meta.className)}">${spinner}<span class="automation-result-dot" aria-hidden="true"></span>${escapeHTML(meta.label)}</span>`;
   }
 
   function renderEmptyState() {
@@ -948,6 +1178,7 @@
             <button type="button" class="automation-close-button" data-automation-action="close-modal" aria-label="关闭弹窗">×</button>
           </div>
           <div class="automation-modal-body">
+            ${renderClawIssueBanner(draft)}
             ${renderBaseFields(
               draft,
               errors,
@@ -984,6 +1215,7 @@
             <button type="button" class="automation-close-button" data-automation-action="close-modal" aria-label="关闭弹窗">×</button>
           </div>
           <div class="automation-modal-body">
+            ${renderClawIssueBanner(draft)}
             ${renderBaseFields(
               draft,
               errors,
@@ -1009,6 +1241,17 @@
             <button type="button" class="automation-primary-button" data-automation-action="save-modal">${modal.mode === "edit" ? "保存修改" : "创建任务"}</button>
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  function renderClawIssueBanner(task) {
+    if (!isTaskClawAbnormal(task)) return "";
+    return `
+      <div class="automation-claw-alert">
+        <strong>执行 Claw 异常</strong>
+        <span>${escapeHTML(getClawIssueTitle(task))}</span>
+        <small>修复方式：在基础信息中更换为可用 Claw，保存后再启用任务。</small>
       </div>
     `;
   }
@@ -1088,6 +1331,14 @@
         ${renderField("任务名称", `<input value="${escapeHTML(draft.name)}" placeholder="${escapeHTML(namePlaceholder)}" data-modal-field="name" />`, errors.name, true)}
         ${renderField("任务描述", `<textarea data-modal-field="description" rows="4" placeholder="补充任务概述、任务背景、产出说明等，用于识别自动化任务">${escapeHTML(draft.description)}</textarea>`)}
         ${renderField("任务执行提示词", `<textarea data-modal-field="instruction" rows="7" placeholder="${escapeHTML(instructionPlaceholder)}">${escapeHTML(draft.instruction)}</textarea>`, errors.instruction, true)}
+        <label class="automation-memory-option">
+          <span class="automation-memory-option-copy">
+            <strong>从执行结果中沉淀记忆</strong>
+            <small>开启后只提取可复用结论，执行日志和重复巡检结果不会直接写入。</small>
+          </span>
+          <input type="checkbox" data-modal-field="memory_enabled" ${draft.memory_enabled ? "checked" : ""} />
+          <span class="automation-memory-switch" aria-hidden="true"><i></i></span>
+        </label>
       </section>
     `;
   }

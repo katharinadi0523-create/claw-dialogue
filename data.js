@@ -136,6 +136,7 @@ const DEMO_DATA = (() => {
       name: "高级项目经理",
       description: "统筹范围、风险与干系人沟通，保障里程碑透明交付与问题及时上升。",
       category: "project_management",
+      chatFlowKey: "seniorProjectManager",
       suggestedPrompts: [
         "请帮我把当前跨团队需求拆成两周节奏：里程碑、依赖、风险登记与干系人沟通要点。"
       ]
@@ -352,6 +353,134 @@ const DEMO_DATA = (() => {
         { name: "联调检查单.md", path: "/ClawAgent/企业智能体/联调检查单.md", size: "22 KB" }
       ],
       finalMessage: "已输出开发任务拆解、联调重点与测试检查单。"
+    },
+    seniorProjectManager: {
+      defaultQuery: "请帮我把当前跨团队需求拆成两周节奏：里程碑、依赖、风险登记与干系人沟通要点。",
+      recentTaskTitle: "生成两周项目推进方案",
+      planningText:
+        "收到。我会先完成 Agent 证书化身份校验，再以最小权限调用项目管理服务，并在需要子智能体协同时只委托必要工具、上下文和权限。",
+      planItems: [
+        { title: "验证高级项目经理 Agent 的 X.509 根身份", tool: "Agent Identity CA", eta: "约 6 秒" },
+        { title: "读取项目现状并生成两周交付计划", tool: "Project MCP", eta: "约 14 秒" },
+        { title: "有限委托子智能体完成风险、依赖和沟通分析", tool: "agent.delegate", eta: "约 16 秒" },
+        { title: "检测高风险动作并执行权限降级", tool: "安全策略编排器", eta: "约 8 秒" },
+        { title: "输出推进方案与安全治理审计摘要", tool: "文档生成", eta: "约 12 秒" }
+      ],
+      stages: [
+        {
+          title: "证书化身份校验",
+          logs: [
+            "已加载高级项目经理 Agent 的 X.509 密码学根身份，并完成证书链、吊销状态和租户绑定校验。",
+            "后续调用项目系统时会使用 agent 证书完成双向 TLS 与请求签名，不只依赖 agent_id 字段。"
+          ],
+          identity: {
+            agentName: "高级项目经理",
+            agentId: "pm-senior",
+            subject: "CN=SeniorProjectManager, OU=ProjectOps, O=Nova Agent Foundry",
+            issuer: "CN=Nova Agent Root CA, O=Nova Agent Foundry",
+            fingerprint: "SHA256: 9F:42:18:AC:71:2E:44:90:BD:36:11:7A:04:CB:8E:21",
+            validUntil: "2026-12-31",
+            proof: "mTLS 握手 + agent.signRequest(project.plan.read)"
+          }
+        },
+        {
+          title: "项目计划生成",
+          logs: [
+            "已读取迭代目标、需求池、当前阻塞项和干系人列表，生成两周推进节奏。",
+            "已把任务拆为范围确认、研发联调、测试验收和上线准备四类，并标记 5 个依赖风险。"
+          ]
+        },
+        {
+          title: "多智能体有限委托",
+          logs: [
+            "主 Agent 准备调用三个子智能体并行分析，但不会让子智能体继承主 Agent 的完整项目权限。",
+            "已为每个子智能体签发短期委托令牌，限定工具白名单、上下文包、有效期和禁止动作。"
+          ],
+          items: [
+            {
+              kind: "subagent_group",
+              id: "pm-subagents-limited-delegation",
+              principalAgent: "高级项目经理",
+              principalAction: "以最小必要权限并行委托项目分析",
+              tasks: [
+                {
+                  title: "RiskScout 风险分析子智能体",
+                  detail: "仅分析阻塞事项、延期概率和升级建议。",
+                  status: "success",
+                  elapsed: "4.2s",
+                  toolWhitelist: ["project.risk.read", "issue.search", "risk.register.suggest"],
+                  contextPackage: ["需求摘要", "阻塞事项清单", "最近 7 天变更记录"],
+                  permissions: ["只读项目数据", "可生成风险建议", "不可修改里程碑"]
+                },
+                {
+                  title: "DependencyMapper 依赖梳理子智能体",
+                  detail: "只梳理跨团队依赖和交付先后关系。",
+                  status: "success",
+                  elapsed: "5.1s",
+                  toolWhitelist: ["project.dependency.read", "team.calendar.read"],
+                  contextPackage: ["里程碑草案", "团队日历摘要", "接口联调计划"],
+                  permissions: ["只读依赖数据", "不可发送通知", "不可创建外部会议"]
+                },
+                {
+                  title: "StakeholderBrief 沟通摘要子智能体",
+                  detail: "生成内部干系人沟通材料，不接触客户联系方式原文。",
+                  status: "running",
+                  elapsed: "00:03",
+                  toolWhitelist: ["doc.draft.create", "stakeholder.role.read"],
+                  contextPackage: ["角色列表", "脱敏沟通偏好", "风险摘要"],
+                  permissions: ["可生成内部草稿", "客户邮箱脱敏", "外发动作禁用"]
+                }
+              ],
+              delegation: {
+                token: "delegation-token: scoped / 15min / non-transferable",
+                inheritedPermissions: "未继承主 Agent 写入、审批、外发权限",
+                audit: "每次子 Agent 工具调用都会写入 delegation_scope 和 cert_fingerprint"
+              }
+            }
+          ]
+        },
+        {
+          title: "高风险动作检测与权限降级",
+          logs: [
+            "系统检测到沟通摘要子智能体尝试调用 customer.mail.bulk_send，动作涉及外部客户群发，风险等级升高。",
+            "安全策略编排器已临时回收外发类高风险权限，并将当前委托降级为只读与内部草稿生成。"
+          ],
+          alerts: [
+            {
+              level: "critical",
+              riskType: "权限降级 / 高危工具阻断",
+              title: "已阻断外部客户批量通知工具调用",
+              summary:
+                "子智能体的原始委托范围不包含外发权限，且目标工具会触达外部客户。系统已自动回收高风险权限，阻断本次调用并要求人工审批后才能恢复。",
+              detections: [
+                { layer: "委托范围", result: "工具不在白名单 customer.mail.bulk_send" },
+                { layer: "动作风险", result: "外部群发 + 影响不可完全回滚" },
+                { layer: "身份校验", result: "证书有效但权限声明不足" }
+              ],
+              spotlight: [
+                { source: "被阻断工具", text: "customer.mail.bulk_send" },
+                { source: "原始权限", text: "doc.draft.create, stakeholder.role.read" },
+                { source: "降级后权限", text: "read_only + internal_draft_only" }
+              ],
+              action: "处置：临时回收外发、写入和审批权限；保留内部草稿生成；记录审计事件 PM-GOV-20260603-001。"
+            }
+          ]
+        },
+        {
+          title: "安全治理审计汇总",
+          logs: [
+            "已完成两周推进方案、风险登记、依赖矩阵和干系人沟通草稿。",
+            "审计摘要显示：主 Agent 通过 X.509 证书证明身份，子智能体仅获得有限委托，高危工具调用已被权限降级策略阻断。"
+          ]
+        }
+      ],
+      artifacts: [
+        { name: "两周项目推进方案.docx", path: "/ClawAgent/项目管理/两周项目推进方案.docx", size: "186 KB" },
+        { name: "项目风险登记表.xlsx", path: "/ClawAgent/项目管理/项目风险登记表.xlsx", size: "92 KB" },
+        { name: "Agent安全治理审计摘要.md", path: "/ClawAgent/项目管理/Agent安全治理审计摘要.md", size: "24 KB" }
+      ],
+      finalMessage:
+        "已生成项目推进方案，并完成安全治理演示：证书化身份已校验、子智能体有限委托已审计、高风险外发工具调用已被权限降级策略阻断。"
     }
   };
 

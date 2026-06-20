@@ -10,6 +10,7 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-30 08:42",
     last_run_status: "success",
     enabled: true,
+    memory_enabled: false,
     agent_id: "claw-mine-general",
     claw_id: "claw-mine-general",
     instruction:
@@ -70,6 +71,7 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-30 08:00",
     last_run_status: "success",
     enabled: true,
+    memory_enabled: false,
     agent_id: "claw-mine-general",
     claw_id: "claw-mine-general",
     instruction:
@@ -109,6 +111,7 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-13 12:00",
     last_run_status: "running",
     enabled: true,
+    memory_enabled: false,
     agent_id: "claw-mine-general",
     claw_id: "claw-mine-general",
     instruction:
@@ -153,6 +156,7 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "",
     last_run_status: "never",
     enabled: false,
+    memory_enabled: false,
     agent_id: "agent-board-pack",
     instruction:
       "汇总一季度经营指标、预算执行率和重点项目里程碑，生成董事会材料预检查摘要，并列出缺失附件和异常指标。",
@@ -179,7 +183,12 @@ window.AUTOMATION_TASKS_MOCK = [
     trigger_summary: "Webhook 触发",
     last_run_at: "2026-04-13 11:42",
     last_run_status: "success",
-    enabled: true,
+    enabled: false,
+    memory_enabled: false,
+    disabled_by: "system",
+    claw_status: "abnormal",
+    claw_disabled_reason: "该智能体已停用、下架或被删除，请重新配置",
+    claw_disabled_at: "2026-06-17 10:30",
     agent_id: "agent-ci-diagnosis",
     instruction:
       "收到构建失败事件后，提取失败 job、关键报错和最近相关提交，输出修复建议，并将摘要通知给对应项目负责人。",
@@ -228,6 +237,7 @@ window.AUTOMATION_TASKS_MOCK = [
     last_run_at: "2026-04-13 08:30",
     last_run_status: "failed",
     enabled: false,
+    memory_enabled: false,
     agent_id: "agent-api-watch",
     instruction:
       "检查价格接口字段和值变化；若检测到价格状态值变化或折扣比例异常，生成变更摘要并通知商品运营与研发接口人。",

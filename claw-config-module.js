@@ -235,6 +235,30 @@
     </div>`;
   }
 
+  function renderMountedMemoryStores() {
+    const stores = window.MemoryModule?.getMountedStores?.() || [];
+    if (!stores.length) {
+      return `<div class="claw-memory-empty">当前 Claw 暂未挂载组织记忆。</div>`;
+    }
+    return `<div class="claw-memory-mounts">
+      ${stores
+        .map((store) => {
+          const access = store.access === "propose-only" ? "可标为更新材料" : "只读";
+          return `<article class="claw-memory-mount">
+            <span class="claw-memory-mount-icon" aria-hidden="true">
+              <svg><use href="#icon-book"></use></svg>
+            </span>
+            <div class="claw-memory-mount-copy">
+              <div><strong>《${escapeHTML(store.name)}》</strong><span>${escapeHTML(access)}</span></div>
+              <p>${escapeHTML(store.description)}</p>
+              <small>授权人：${escapeHTML(store.authorizedBy)} · 更新于 ${escapeHTML(store.updatedAt)}</small>
+            </div>
+          </article>`;
+        })
+        .join("")}
+    </div>`;
+  }
+
   function render() {
     if (!state.root) return;
     state.root.innerHTML = `
@@ -272,6 +296,15 @@
               <h2>核心文件</h2>
             </div>
             ${state.selectedCoreFileKey ? renderCoreFileEditor() : renderCoreFilesList()}
+          </section>
+
+          <section class="claw-config-section">
+            <div class="claw-config-section-head">
+              <h2>组织记忆</h2>
+              <p>查看当前个人 Claw 已被授权挂载的组织记忆。</p>
+            </div>
+            ${renderMountedMemoryStores()}
+            <div class="claw-memory-notice">挂载关系和权限由组织管理员维护，使用端不能直接修改。</div>
           </section>
         </div>
       </section>
@@ -396,6 +429,9 @@
     container.addEventListener("click", handleClick);
     container.addEventListener("input", handleInput);
     container.addEventListener("change", handleChange);
+    window.addEventListener("memory:updated", () => {
+      if (String(window.location.hash || "").replace(/^#/, "") === "clawconfig") render();
+    });
   }
 
   window.ClawConfigModule = { init, render };

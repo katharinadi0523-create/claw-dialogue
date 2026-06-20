@@ -52,9 +52,9 @@ function renderAvatar(avatarEl, profile) {
 
 function applyUserProfile(username) {
   const profile = getUserProfile(username);
-  renderAvatar(document.querySelector('.user-card .avatar'), profile);
-  const nameEl = document.querySelector('.user-card .user-name');
-  const roleEl = document.querySelector('.user-card .user-role');
+  renderAvatar(document.querySelector('#userAvatarBtn'), profile);
+  const nameEl = document.querySelector('#userAvatarPopover .user-name');
+  const roleEl = document.querySelector('#userAvatarPopover .user-role');
   if (nameEl) nameEl.textContent = profile.name;
   if (roleEl) roleEl.textContent = profile.role;
 }
@@ -112,6 +112,40 @@ function setupUserAvatarMenu() {
   });
 }
 
+function setupSidebarSettingsMenu() {
+  const settingsWrap = document.getElementById('sidebarSettingsWrap');
+  const settingsBtn = document.getElementById('sidebarSettingsBtn');
+  if (!settingsWrap || !settingsBtn) return;
+
+  const closeMenu = () => {
+    settingsWrap.removeAttribute('data-menu-open');
+    settingsBtn.setAttribute('aria-expanded', 'false');
+  };
+
+  settingsBtn.addEventListener('click', (event) => {
+    event.stopPropagation();
+    const isOpen = settingsWrap.getAttribute('data-menu-open') === 'true';
+    if (isOpen) {
+      closeMenu();
+      return;
+    }
+    settingsWrap.setAttribute('data-menu-open', 'true');
+    settingsBtn.setAttribute('aria-expanded', 'true');
+  });
+
+  settingsWrap.querySelectorAll('[data-route]').forEach((item) => {
+    item.addEventListener('click', () => closeMenu());
+  });
+
+  document.addEventListener('click', (event) => {
+    if (!settingsWrap.contains(event.target)) closeMenu();
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape') closeMenu();
+  });
+}
+
 function isValidLogin(username, password) {
   return VALID_CREDENTIALS[username] === password;
 }
@@ -130,6 +164,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   setupUserAvatarMenu();
+  setupSidebarSettingsMenu();
 
   // Toggle password visibility
   if (togglePasswordBtn && passwordInput) {

@@ -7,7 +7,8 @@
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>ClawAgent v1.0 · 企业 AI 工作代理原型</title>
-    <link rel="stylesheet" href="styles.css?v=20260527-composer-agent-picker" />
+    <link rel="icon" type="image/png" href="assets/claw-brand-icon.png" />
+    <link rel="stylesheet" href="styles.css?v=20260617-filter-icon-claw-reason" />
     <link rel="stylesheet" href="login.css?v=20260601-dynamic-hero-fit" />
   </head>
   <body>
@@ -417,22 +418,50 @@
         </section>
 
         <div class="sidebar-bottom">
-          <button class="sidebar-link" type="button" data-route="files"><svg><use href="#icon-file"></use></svg><span>文件</span></button>
-          <button class="sidebar-link" type="button" data-route="clawconfig"><svg><use href="#icon-settings"></use></svg><span>Claw配置</span></button>
-          <button class="sidebar-link" type="button" data-route="product"><svg><use href="#icon-info"></use></svg><span>产品说明</span></button>
-          <div class="user-card">
+          <div class="sidebar-bottom-bar">
             <div class="user-avatar-wrap" id="userAvatarWrap">
               <button class="avatar" type="button" id="userAvatarBtn" aria-haspopup="menu" aria-expanded="false" aria-label="账户菜单">张</button>
-              <div class="user-avatar-menu" id="userAvatarMenu" role="menu" aria-label="账户操作">
+              <div class="user-avatar-popover" id="userAvatarPopover" role="menu" aria-label="账户信息">
+                <div class="user-meta">
+                  <div class="user-name">张三</div>
+                  <div class="user-role">财务运营 · 产品部</div>
+                </div>
                 <button class="user-avatar-menu-item danger" type="button" id="logoutBtn" role="menuitem">
                   <svg aria-hidden="true"><use href="#icon-logout"></use></svg>
                   <span>退出登录</span>
                 </button>
               </div>
             </div>
-            <div class="user-meta">
-              <div class="user-name">张三</div>
-              <div class="user-role">财务运营 · 产品部</div>
+            <div class="sidebar-settings-wrap" id="sidebarSettingsWrap">
+              <button
+                class="sidebar-settings-btn"
+                type="button"
+                id="sidebarSettingsBtn"
+                aria-haspopup="menu"
+                aria-expanded="false"
+                aria-label="设置"
+              >
+                <svg aria-hidden="true"><use href="#icon-settings"></use></svg>
+                <span>设置</span>
+              </button>
+              <div class="sidebar-settings-menu" id="sidebarSettingsMenu" role="menu" aria-label="设置菜单">
+                <button class="sidebar-settings-menu-item sidebar-link" type="button" data-route="files" role="menuitem">
+                  <svg aria-hidden="true"><use href="#icon-file"></use></svg>
+                  <span>文件</span>
+                </button>
+                <button class="sidebar-settings-menu-item sidebar-link" type="button" data-route="memory" role="menuitem">
+                  <svg aria-hidden="true"><use href="#icon-archive"></use></svg>
+                  <span>记忆中心</span>
+                </button>
+                <button class="sidebar-settings-menu-item sidebar-link" type="button" data-route="clawconfig" role="menuitem">
+                  <svg aria-hidden="true"><use href="#icon-settings"></use></svg>
+                  <span>Claw配置</span>
+                </button>
+                <button class="sidebar-settings-menu-item sidebar-link" type="button" data-route="product" role="menuitem">
+                  <svg aria-hidden="true"><use href="#icon-info"></use></svg>
+                  <span>产品说明</span>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -587,6 +616,13 @@
               </div>
               <div class="context-list" id="contextList"></div>
             </section>
+            <section class="panel-card">
+              <div class="panel-card-title">
+                <h2>记忆</h2>
+                <span id="memoryCount">0</span>
+              </div>
+              <div class="memory-panel-list" id="memoryPanelList"></div>
+            </section>
           </div>
         </section>
 
@@ -604,13 +640,15 @@
 
     <script src="login.js"></script>
     <script src="data.js?v=20260518-toolstate2"></script>
-    <script src="automation-data.js?v=20260506-1"></script>
+    <script src="memory-data.js?v=20260619-update-materials"></script>
+    <script src="memory-module.js?v=20260619-update-materials"></script>
+    <script src="automation-data.js?v=20260617-claw-warning-only"></script>
     <script src="automation-executions-data.js?v=20260522-1"></script>
-    <script src="automation-module.js?v=20260526-agent-column"></script>
+    <script src="automation-module.js?v=20260617-filter-icon-claw-reason"></script>
     <script src="claw-config-data.js?v=20260522-primary-fallback"></script>
     <script src="claw-config-module.js?v=20260522-nexus-style"></script>
     <script src="files-data.js?v=20260522-workspace"></script>
     <script src="files-module.js?v=20260522-workspace"></script>
-    <script src="app.js?v=20260528-composer-agent-toggle"></script>
+    <script src="app.js?v=20260619-update-materials"></script>
   </body>
 </html>

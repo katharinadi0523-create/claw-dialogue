@@ -606,6 +606,8 @@
     fileCount: document.getElementById("fileCount"),
     contextList: document.getElementById("contextList"),
     contextCount: document.getElementById("contextCount"),
+    memoryPanelList: document.getElementById("memoryPanelList"),
+    memoryCount: document.getElementById("memoryCount"),
     composerTextarea: document.getElementById("composerTextarea"),
     composerInputSurface: document.getElementById("composerInputSurface"),
     composerSkillChips: document.getElementById("composerSkillChips"),
@@ -925,6 +927,11 @@
     const agent = rememberSummonedEnterpriseAgent(agentId);
     if (!agent) return;
     state.enterprise.agentSelectorOpen = false;
+    if (agent.id === "pm-senior") {
+      createOrRestartEnterpriseSession(agent, getDefaultEnterprisePrompt(agent));
+      showSkillPlazaToast(`已召唤「${agent.name}」并启动安全治理流程`);
+      return;
+    }
     showSkillPlazaToast(`已召唤「${agent.name}」`);
     navigate("chat");
     window.requestAnimationFrame(() => nodes.composerTextarea?.focus());
@@ -932,6 +939,9 @@
 
   function init() {
     hydrateRouteFromHash();
+    if (window.MemoryModule?.init) {
+      window.MemoryModule.init({ container: nodes.stream });
+    }
     if (window.AutomationTasksModule?.init) {
       window.AutomationTasksModule.init({ container: nodes.stream });
     }
@@ -949,6 +959,7 @@
     window.__routeTo = (route) => navigate(route);
     window.addEventListener("hashchange", handleHashChange);
     window.addEventListener("automation-tasks:updated", handleAutomationTasksUpdated);
+    window.addEventListener("memory:updated", () => render());
     render();
   }
 
@@ -2104,6 +2115,7 @@
       route === "skillhub" ||
       route === "plugins" ||
       route === "product" ||
+      route === "memory" ||
       route === "clawconfig" ||
       route === "files"
     );
@@ -2121,6 +2133,8 @@
       state.route = "plugins";
     } else if (hash === "product") {
       state.route = "product";
+    } else if (hash === "memory") {
+      state.route = "memory";
     } else if (hash === "clawconfig") {
       state.route = "clawconfig";
     } else if (hash === "files") {
@@ -2480,6 +2494,8 @@
               ? "plugins"
               : route === "product"
                 ? "product"
+              : route === "memory"
+                ? "memory"
               : route === "clawconfig"
                 ? "clawconfig"
                 : route === "files"
@@ -2949,6 +2965,7 @@
     nodes.appShell.classList.toggle("route-skillhub", state.route === "skillhub");
     nodes.appShell.classList.toggle("route-plugins", state.route === "plugins");
     nodes.appShell.classList.toggle("route-product", state.route === "product");
+    nodes.appShell.classList.toggle("route-memory", state.route === "memory");
     nodes.appShell.classList.toggle("route-clawconfig", state.route === "clawconfig");
     nodes.appShell.classList.toggle("route-files", state.route === "files");
     nodes.appShell.classList.toggle("route-chat", state.route === "chat");
@@ -2965,6 +2982,13 @@
     nodes.appShell.querySelectorAll("[data-route]").forEach((button) => {
       button.classList.toggle("active", button.getAttribute("data-route") === state.route);
     });
+    const settingsBtn = document.getElementById("sidebarSettingsBtn");
+    if (settingsBtn) {
+      settingsBtn.classList.toggle(
+        "active",
+        state.route === "files" || state.route === "memory" || state.route === "clawconfig" || state.route === "product"
+      );
+    }
   }
 
   function renderNotices() {
@@ -4799,6 +4823,15 @@
       return;
     }
 
+    if (state.route === "memory") {
+      if (window.MemoryModule?.render) {
+        window.MemoryModule.render();
+      } else {
+        nodes.stream.innerHTML = `<div class="panel-empty">记忆模块加载失败。</div>`;
+      }
+      return;
+    }
+
     if (state.route === "clawconfig") {
       if (window.ClawConfigModule?.render) {
         window.ClawConfigModule.render();
@@ -4825,9 +4858,19 @@
     const html = [
       getVisibleSteps().map((step) => renderStepItems(step)).join(""),
       renderRuntimeSteerMessages(),
-      renderRuntimeExecutedQueueMessages()
+      renderRuntimeExecutedQueueMessages(),
+      renderSelectedExpertMemoryExperience()
     ].join("");
     nodes.stream.innerHTML = html;
+  }
+
+  function renderSelectedExpertMemoryExperience() {
+    const agent = getSelectedEnterpriseAgent();
+    if (!agent || !window.MemoryModule) return "";
+    return [
+      window.MemoryModule.renderExpertHandoff?.(agent.id, agent.name) || "",
+      window.MemoryModule.renderExpertSuggestions?.(agent.id, agent.name) || ""
+    ].join("");
   }
 
   function renderEnterpriseAgentsPage() {
@@ -4982,6 +5025,7 @@
             .join("")}
         </div>
       </article>
+      ${window.MemoryModule?.renderExpertHandoff?.(agent.id, agent.name) || ""}
     </section>`;
   }
 
@@ -4995,6 +5039,7 @@
         attachments: []
       })
     );
+    parts.push(window.MemoryModule?.renderExpertHandoff?.(agent.id, agent.name) || "");
 
     if (session.phase >= 1) {
       parts.push(renderNarration({ text: preset.planningText }));
@@ -5026,6 +5071,7 @@
 
     if (session.phase >= 6) {
       parts.push(renderNarration({ text: preset.finalMessage }));
+      parts.push(window.MemoryModule?.renderExpertSuggestions?.(agent.id, agent.name) || "");
     }
 
     parts.push(renderRuntimeSteerMessages(), renderRuntimeExecutedQueueMessages());
@@ -5036,6 +5082,9 @@
   function renderEnterpriseStage(stage, status) {
     const pillClass = status === "running" ? "info" : "success";
     const pillText = status === "running" ? "执行中" : "已完成";
+    const identity = stage.identity ? renderAgentIdentityCard(stage.identity) : "";
+    const embeddedItems = Array.isArray(stage.items) ? stage.items.map((item) => renderEnterpriseStageItem(item)).join("") : "";
+    const alerts = Array.isArray(stage.alerts) ? stage.alerts.map((alert) => renderSecurityAlert(alert)).join("") : "";
     return `<div class="message-row">
       <article class="enterprise-stage-card">
         <div class="card-head">
@@ -5045,8 +5094,104 @@
         <ul class="enterprise-stage-log-list">
           ${stage.logs.map((line) => `<li>${escapeHTML(line)}</li>`).join("")}
         </ul>
+        ${identity}
+        ${embeddedItems}
+        ${alerts}
       </article>
     </div>`;
+  }
+
+  function renderEnterpriseStageItem(item) {
+    if (!item || typeof item !== "object") return "";
+    if (item.kind === "subagent_group") return renderSubagentGroup(item, { embedded: true });
+    return "";
+  }
+
+  function renderAgentIdentityCard(identity) {
+    const fields = [
+      { label: "Agent", value: identity.agentName },
+      { label: "Agent ID", value: identity.agentId },
+      { label: "Subject", value: identity.subject },
+      { label: "Issuer", value: identity.issuer },
+      { label: "Fingerprint", value: identity.fingerprint },
+      { label: "Valid Until", value: identity.validUntil },
+      { label: "Proof", value: identity.proof }
+    ].filter((item) => item.value);
+    return `<section class="agent-identity-card">
+      <div class="agent-identity-head">
+        <span class="agent-identity-icon" aria-hidden="true">${icon("shield")}</span>
+        <div>
+          <strong>X.509 Agent 根身份</strong>
+          <span>服务调用前完成证书链与请求签名校验</span>
+        </div>
+      </div>
+      <dl class="agent-identity-grid">
+        ${fields
+          .map(
+            (field) => `<div>
+            <dt>${escapeHTML(field.label)}</dt>
+            <dd>${escapeHTML(field.value)}</dd>
+          </div>`
+          )
+          .join("")}
+      </dl>
+    </section>`;
+  }
+
+  function renderSecurityAlert(alert) {
+    const level = ["critical", "high", "medium", "low"].includes(alert.level) ? alert.level : "medium";
+    const detections = Array.isArray(alert.detections) ? alert.detections : [];
+    const spotlight = Array.isArray(alert.spotlight) ? alert.spotlight : [];
+    return `<section class="security-alert security-alert--${escapeAttr(level)}">
+      <div class="security-alert-head">
+        <span class="security-alert-icon" aria-hidden="true">${icon("shield")}</span>
+        <div class="security-alert-title-block">
+          <span class="security-alert-kicker">${escapeHTML(alert.riskType || "安全告警")}</span>
+          <strong>${escapeHTML(alert.title || "检测到安全风险")}</strong>
+        </div>
+        <span class="security-alert-level">${escapeHTML(securityAlertLevelLabel(level))}</span>
+      </div>
+      ${alert.summary ? `<p class="security-alert-summary">${escapeHTML(alert.summary)}</p>` : ""}
+      ${
+        detections.length
+          ? `<div class="security-alert-detections">
+          ${detections
+            .map(
+              (item) => `<span class="security-alert-chip">
+                <b>${escapeHTML(item.layer || "检测层")}</b>
+                <span>${escapeHTML(item.result || "已拦截")}</span>
+              </span>`
+            )
+            .join("")}
+        </div>`
+          : ""
+      }
+      ${
+        spotlight.length
+          ? `<div class="security-spotlight">
+          <div class="security-spotlight-label">Spotlighting 隔离片段</div>
+          ${spotlight
+            .map(
+              (item) => `<div class="security-spotlight-item">
+                <span>${escapeHTML(item.source || "片段")}</span>
+                <code>${escapeHTML(item.text || "")}</code>
+              </div>`
+            )
+            .join("")}
+        </div>`
+          : ""
+      }
+      ${alert.action ? `<div class="security-alert-action">${escapeHTML(alert.action)}</div>` : ""}
+    </section>`;
+  }
+
+  function securityAlertLevelLabel(level) {
+    return {
+      critical: "严重",
+      high: "高危",
+      medium: "中危",
+      low: "低危"
+    }[level] || "中危";
   }
 
   function getAgentAvatarInitial(name) {
@@ -5079,7 +5224,12 @@
       if (item.id === "tool-docx-generate-running" && state.currentStep >= 25) return "";
       if (item.id === "tool-local-delete-destructive" && state.currentStep >= 30) return "";
       if (item.id === "artifacts-001" && state.currentStep >= 32) return "";
-      return renderItem(item, step);
+      const renderedItem = renderItem(item, step);
+      const memoryEvents =
+        window.MemoryModule?.renderConversationEvents?.("expense", item.id, {
+          answers: state.answers
+        }) || "";
+      return `${renderedItem}${memoryEvents}`;
     }).join("");
   }
 
@@ -5836,16 +5986,18 @@
     return `<span class="multiagent-task-status multiagent-task-status--pending"><span>待开始</span></span>`;
   }
 
-  function renderSubagentGroup(item) {
+  function renderSubagentGroup(item, options = {}) {
     const tasks = normalizeSubagentTasks(item);
     const principalName = escapeHTML(item.principalAgent || "子代理");
     const principalAct = escapeHTML(item.principalAction || item.title || "并行执行任务");
+    const embedded = Boolean(options.embedded);
     const taskRows = tasks
       .map(
         (task) => `<li class="multiagent-task">
         <div class="multiagent-task-main">
           <span class="multiagent-task-title">${escapeHTML(task.title)}</span>
           ${task.detail ? `<span class="multiagent-task-detail">${escapeHTML(task.detail)}</span>` : ""}
+          ${renderSubagentDelegationDetails(task)}
         </div>
         <div class="multiagent-task-meta">
           ${renderSubagentTaskStatus(task.status || "pending")}
@@ -5854,15 +6006,54 @@
       </li>`
       )
       .join("");
-
-    return `<div class="message-row">
-      <div class="multiagent-block">
-        <div class="multiagent-principal">
-          <span class="multiagent-principal-icon" aria-hidden="true">${icon("multiagent")}</span>
-          <p class="multiagent-principal-text">并行启用子代理 <strong>${principalName}</strong>（${principalAct}）</p>
-        </div>
-        <ul class="multiagent-task-list">${taskRows}</ul>
+    const delegation = item.delegation ? renderSubagentDelegationSummary(item.delegation) : "";
+    const body = `<div class="multiagent-block${embedded ? " is-embedded" : ""}">
+      <div class="multiagent-principal">
+        <span class="multiagent-principal-icon" aria-hidden="true">${icon("multiagent")}</span>
+        <p class="multiagent-principal-text">并行启用子代理 <strong>${principalName}</strong>（${principalAct}）</p>
       </div>
+      <ul class="multiagent-task-list">${taskRows}</ul>
+      ${delegation}
+    </div>`;
+
+    return embedded ? body : `<div class="message-row">${body}</div>`;
+  }
+
+  function renderSubagentDelegationDetails(task) {
+    const rows = [
+      { label: "工具白名单", values: task.toolWhitelist },
+      { label: "上下文包", values: task.contextPackage },
+      { label: "权限边界", values: task.permissions }
+    ].filter((row) => Array.isArray(row.values) && row.values.length);
+    if (!rows.length) return "";
+    return `<div class="multiagent-delegation-grid">
+      ${rows
+        .map(
+          (row) => `<div class="multiagent-delegation-row">
+          <span>${escapeHTML(row.label)}</span>
+          <div>${row.values.map((value) => `<em>${escapeHTML(value)}</em>`).join("")}</div>
+        </div>`
+        )
+        .join("")}
+    </div>`;
+  }
+
+  function renderSubagentDelegationSummary(delegation) {
+    const entries = [
+      { label: "委托令牌", value: delegation.token },
+      { label: "继承权限", value: delegation.inheritedPermissions },
+      { label: "审计", value: delegation.audit }
+    ].filter((entry) => entry.value);
+    if (!entries.length) return "";
+    return `<div class="multiagent-delegation-summary">
+      ${entries
+        .map(
+          (entry) => `<span>
+          <b>${escapeHTML(entry.label)}</b>
+          ${escapeHTML(entry.value)}
+        </span>`
+        )
+        .join("")}
     </div>`;
   }
 
@@ -6258,6 +6449,7 @@
       renderProgressPanel();
       renderFilePanel(files, selectedFile);
       renderContextPanel();
+      renderMemoryPanel("expense");
       return;
     }
     renderPreviewPanel(files, selectedFile);
@@ -6309,6 +6501,22 @@
           )
           .join("")
       : `<div class="panel-empty">暂无工具调用</div>`;
+    renderMemoryPanel(state.chatMode === "enterprise_session" ? `enterprise:${state.enterprise.activeSessionId}` : "expense");
+  }
+
+  function renderMemoryPanel(sessionKey) {
+    if (!nodes.memoryPanelList || !nodes.memoryCount) return;
+    const memory = window.MemoryModule?.getConversationMemory?.(sessionKey) || { used: [], remembered: [] };
+    const context =
+      sessionKey === "expense"
+        ? {
+            answers: state.answers,
+            visibleItemIds: getVisibleSteps().flatMap((step) => step.items.map((item) => item.id))
+          }
+        : {};
+    const overview = window.MemoryModule?.renderOverview?.(sessionKey, context) || "";
+    nodes.memoryPanelList.innerHTML = overview || `<div class="panel-empty">暂无记忆</div>`;
+    nodes.memoryCount.textContent = String(nodes.memoryPanelList.querySelectorAll(".memory-overview-item").length);
   }
 
   function renderProgressPanel() {
